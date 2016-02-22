@@ -1,0 +1,1508 @@
+%%                                      ATTENTION% ===> this file was generated automatically by noweave --- better not edit it
+%%
+%%              !!! Just edit the ".nw" File !!!
+%%
+%%                      DO NOT EDIT THE .tex FILE'S
+%%
+\nwfilename{pkg-updated.nw}\nwbegincode{1}\sublabel{NW1GrkFo-3iHmBG-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3iHmBG-1}}}\moddef{version~{\nwtagstyle{}\subpageref{NW1GrkFo-3iHmBG-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+var (
+        MAJOR_VERSION=0
+        MINOR_VERSION=1
+        PATCH_VERSION=0
+)
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{2}\nwdocspar
+
+\nwenddocs{}\nwbegincode{3}\sublabel{NW1GrkFo-2ea6on-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\endmoddef\nwstartdeflinemarkup\nwprevnextdefs{\relax}{NW1GrkFo-2ea6on-2}\nwenddeflinemarkup
+Ideas: 
+        - Reports about pkg updates needs to report too, \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} maybe take care of commands running afterwards
+        - Output from updated pkg messages must be interprete to add in report as well 
+        - Version 2.0: Jail Support, ...
+        - Version 2.0: Desktop: Panel tool for display succesfull updates
+        
+Bugs:
+        - If db exists but is empty, the synctodb must run at first (disabled currently)
+        - Sudo run does not work correct
+        - SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
+
+Conceptional:
+        - The SyncPackageDB will overwrite or just update package infomations.
+                -> Are this save for all use-cases ?
+                        Which use-cases exists ?
+\nwalsodefined{\\{NW1GrkFo-2ea6on-2}\\{NW1GrkFo-2ea6on-3}\\{NW1GrkFo-2ea6on-4}\\{NW1GrkFo-2ea6on-5}\\{NW1GrkFo-2ea6on-6}\\{NW1GrkFo-2ea6on-7}\\{NW1GrkFo-2ea6on-8}}\nwnotused{TODO}\nwidentuses{\\{{\nwixident{and}}{and}}}\nwindexuse{\nwixident{and}}{and}{NW1GrkFo-2ea6on-1}\nwendcode{}\nwbegindocs{4}\nwdocspar
+
+
+\newpage
+\section{The Idea}
+
+Simple package update daemon for automated pkg update.
+The pkg-updated takle the update by using the pkg command.
+
+\newpage
+\subsection{Configuration}
+The {\Tt{}pkg-updated.conf\nwendquote} parameters in detail.
+
+The {\Tt{}exclude\nwendquote} define the packages, which will not updated automatically.
+Reports of the pkg upgrade progress will be created if parameter is set true (boolean). 
+
+\nwenddocs{}\nwbegincode{5}\sublabel{NW1GrkFo-1cwekS-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\endmoddef\nwstartdeflinemarkup\nwprevnextdefs{\relax}{NW1GrkFo-1cwekS-2}\nwenddeflinemarkup
+\{
+\nwalsodefined{\\{NW1GrkFo-1cwekS-2}\\{NW1GrkFo-1cwekS-3}\\{NW1GrkFo-1cwekS-4}\\{NW1GrkFo-1cwekS-5}\\{NW1GrkFo-1cwekS-6}\\{NW1GrkFo-1cwekS-7}\\{NW1GrkFo-1cwekS-8}\\{NW1GrkFo-1cwekS-9}\\{NW1GrkFo-1cwekS-A}\\{NW1GrkFo-1cwekS-B}}\nwnotused{pkg-updated.conf}\nwendcode{}\nwbegindocs{6}\nwdocspar
+
+Which packages should never be updated ?
+It is also possible to lock packages by "pkg lock <pkg-name>" command
+\nwenddocs{}\nwbegincode{7}\sublabel{NW1GrkFo-1cwekS-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-2}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-1}{NW1GrkFo-1cwekS-3}\nwenddeflinemarkup
+        "exclude-packages": [
+                "go"
+        ],
+\nwendcode{}\nwbegindocs{8}\nwdocspar
+
+Create a pkg-update report ?
+\nwenddocs{}\nwbegincode{9}\sublabel{NW1GrkFo-1cwekS-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-3}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-2}{NW1GrkFo-1cwekS-4}\nwenddeflinemarkup
+        "create-report": true,
+\nwendcode{}\nwbegindocs{10}\nwdocspar
+
+Enable automated update ?
+\nwenddocs{}\nwbegincode{11}\sublabel{NW1GrkFo-1cwekS-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-4}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-3}{NW1GrkFo-1cwekS-5}\nwenddeflinemarkup
+        "do-freebsd-update": false,
+\nwendcode{}\nwbegindocs{12}\nwdocspar
+
+Should a configured daemon restarted after pkg update ?
+\nwenddocs{}\nwbegincode{13}\sublabel{NW1GrkFo-1cwekS-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-5}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-4}{NW1GrkFo-1cwekS-6}\nwenddeflinemarkup
+        "restart-daemons": true,
+\nwendcode{}\nwbegindocs{14}\nwdocspar
+
+Should all pkg commands run with sudo ?
+\nwenddocs{}\nwbegincode{15}\sublabel{NW1GrkFo-1cwekS-6}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-6}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-5}{NW1GrkFo-1cwekS-7}\nwenddeflinemarkup
+        "use-sudo": false,
+\nwendcode{}\nwbegindocs{16}\nwdocspar
+
+If the service restart command fail, should the related package downgrade to the last running version ?
+\nwenddocs{}\nwbegincode{17}\sublabel{NW1GrkFo-1cwekS-7}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-7}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-6}{NW1GrkFo-1cwekS-8}\nwenddeflinemarkup
+        "downgrade-package-on-failed-restart": true,
+\nwendcode{}\nwbegindocs{18}\nwdocspar
+
+PKG Archive directory for rollback operations 
+\nwenddocs{}\nwbegincode{19}\sublabel{NW1GrkFo-1cwekS-8}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-8}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-7}{NW1GrkFo-1cwekS-9}\nwenddeflinemarkup
+        "pkg-archive-enable": true,
+        "pkg-archive-directory": "./archive",
+\nwendcode{}\nwbegindocs{20}\nwdocspar
+
+Database files
+\nwenddocs{}\nwbegincode{21}\sublabel{NW1GrkFo-1cwekS-9}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-9}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-8}{NW1GrkFo-1cwekS-A}\nwenddeflinemarkup
+        "pkg-database-file": "/var/db/pkg/local.sqlite",
+        "database-file": "./pkg-updated.sqlite",
+\nwendcode{}\nwbegindocs{22}\nwdocspar
+
+Should the pkg-updated DB syncronized on every boot
+If set to true, the DB will delete on every start of the program.
+All rollback package informations are lost, so no automate rollback possible !
+
+\nwenddocs{}\nwbegincode{23}\sublabel{NW1GrkFo-1cwekS-A}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-A}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-9}{NW1GrkFo-1cwekS-B}\nwenddeflinemarkup
+        "fresh-db-sync-on-start": false
+\nwendcode{}\nwbegindocs{24}\nwdocspar
+
+
+\nwenddocs{}\nwbegincode{25}\sublabel{NW1GrkFo-1cwekS-B}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-B}}}\moddef{pkg-updated.conf~{\nwtagstyle{}\subpageref{NW1GrkFo-1cwekS-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-1cwekS-A}{\relax}\nwenddeflinemarkup
+\}
+\nwendcode{}\nwbegindocs{26}\nwdocspar
+
+\subsection{Read the configuration}
+
+We must read and interpret the configuration file.
+
+The default config file name must be defined as well as the struct. 
+
+\nwenddocs{}\nwbegincode{27}\sublabel{NW1GrkFo-2h7kw1-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2h7kw1-1}}}\moddef{pkg-updated.go: variables~{\nwtagstyle{}\subpageref{NW1GrkFo-2h7kw1-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-2h7kw1-2}\nwenddeflinemarkup
+const \nwlinkedidentc{config_file}{NW1GrkFo-2h7kw1-1} = "./pkg-updated.conf"; \nwindexdefn{\nwixident{config{\_}file}}{config:unfile}{NW1GrkFo-2h7kw1-1}
+\nwalsodefined{\\{NW1GrkFo-2h7kw1-2}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwidentdefs{\\{{\nwixident{config{\_}file}}{config:unfile}}}\nwendcode{}\nwbegindocs{28}\nwdocspar
+
+Made with: https://mholt.github.io/json-to-go/
+
+\nwenddocs{}\nwbegincode{29}\sublabel{NW1GrkFo-2h7kw1-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2h7kw1-2}}}\moddef{pkg-updated.go: variables~{\nwtagstyle{}\subpageref{NW1GrkFo-2h7kw1-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-2h7kw1-1}{\relax}\nwenddeflinemarkup
+var config struct \{
+        ExcludePackages []string `json:"exclude-packages"`
+    CreateReport bool `json:"create-report"`
+        ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
+    DoFreebsdUpdate     bool `json:"do-freebsd-update"`
+    RestartDaemons bool `json:"restart-daemons"`
+    DowngradePackageOnFailedRestart     bool `json:"downgrade-package-on-failed-restart"`
+        UseSudo bool `json:"use-sudo"`
+        ArchiveEnable bool `json:"pkg-archive-enable"`
+    ArchiveFile string `json:"pkg-archive-directory"`
+    PkgDatabaseFile string `json:"pkg-database-file"`
+    DatabaseFile string `json:"database-file"`
+\};
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{30}\nwdocspar
+
+To use json, we need the json package
+
+\nwenddocs{}\nwbegincode{31}\sublabel{NW1GrkFo-23yzt2-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-23yzt2-2}\nwenddeflinemarkup
+"encoding/json"
+\nwalsodefined{\\{NW1GrkFo-23yzt2-2}\\{NW1GrkFo-23yzt2-3}\\{NW1GrkFo-23yzt2-4}\\{NW1GrkFo-23yzt2-5}\\{NW1GrkFo-23yzt2-6}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{32}\nwdocspar
+
+\nwenddocs{}\nwbegincode{33}\sublabel{NW1GrkFo-3u3wI7-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3u3wI7-1}}}\moddef{pkg-updated.go: readconfig~{\nwtagstyle{}\subpageref{NW1GrkFo-3u3wI7-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+func ReadConfig() int \{
+        configfile, err := os.Open(\nwlinkedidentc{config_file}{NW1GrkFo-2h7kw1-1});
+        if err != nil \{
+                fmt.Printf("Error: %s\\n", err.Error());
+                return -1;
+        \}
+        defer configfile.Close();
+
+        jsonParser := json.NewDecoder(configfile)
+//      conf := new(config);
+        
+        if err = jsonParser.Decode(&config); err != nil \{
+                fmt.Printf("Error: %s\\n", err.Error())
+                return -1;
+        \}
+        fmt.Println(config);
+        return 0;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwidentuses{\\{{\nwixident{config{\_}file}}{config:unfile}}}\nwindexuse{\nwixident{config{\_}file}}{config:unfile}{NW1GrkFo-3u3wI7-1}\nwendcode{}\nwbegindocs{34}\nwdocspar
+
+\newpage
+\section{Update vs. Upgrade}
+
+What is an update and what is an upgrade ?
+This question is not easy to answer.
+In general, if the Major version of a Software change, then we talk about an Upgrade.
+So an update means if from Version x to Version y the minor number have been changed.
+
+\newpage
+\section{The Workflow for automated package update}
+
+The general progress for the pkg-updated have to be:
+
+1.) Get current installed packages from existing Database.
+If the existing Database does not exists, test if /usr/local/ and subdirectories or files exists.
+If a /usr/local directory tree exist's without any pkg information databases the program have to stop for secure.
+When the database exists the program have to analyse all installed packages by files and directories.
+
+2.) Create a backup of all installed packages and store it under /var/backup or similar directory
+In case of upgrade failure, we are able to rollback the system to a stable state back
+We can also check under /var/cache/pkg for installed versions.
+
+3.) If the backup successfully done, we can check for updates
+Therefor we have to check the the version differences for newer versions
+
+Possibilities:
+        - Use pkg version command
+        - Use sqlite and analyse all local repos with the version from local.sqlite
+
+Take all updateable packages in a separate array/hash/db
+
+x) Before the daemon upgrade a package some steps have to be done before:
+
+- Read enabled services from rc.conf and check service scripts for the target command.
+- If the target daemon command available, verify the path/bin with the pkg db information and detect the pkg name.
+- Get all running deamons and used config files
+        -> Check config files from packages (/usr/local/etc/*, /etc/*)
+- Check if the config files will overwrite on update
+        -> Check for bare configfile names or configfile.sample 
+        
+z) Now update all non-critical packages if possible and not locked
+
+Before update, check for scheduled packages.
+
+z) Restart a service after update (example apache)
+
+If the service restart command failing or the daemon does not come up after a while, the update process are failed at all.
+The daemon must reinstall the old package and mark the update as broken. 
+
+\newpage
+\section{Get current installed packages from existing Database}
+
+The pkg program use sqlite as database for store all package related informations.
+This database will be used to fetch all related informations as source for the update daemon.
+
+
+Follow go modules are used:
+\nwenddocs{}\nwbegincode{35}\sublabel{NW1GrkFo-23yzt2-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-2}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-23yzt2-1}{NW1GrkFo-23yzt2-3}\nwenddeflinemarkup
+"fmt"
+"os"
+"strconv"
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{36}\nwdocspar
+
+\newpage
+\subsection{The sqlite connection}
+
+We need a sqlite driver for go to connect and read the database schema.
+There are a lot of sqlite3 drivers available for golang, but not all supports the golang database/sql interface.
+I will use "https://github.com/mattn/go-sqlite3", because its support the golang sql interface.
+
+\nwenddocs{}\nwbegincode{37}\sublabel{NW1GrkFo-23yzt2-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-3}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-23yzt2-2}{NW1GrkFo-23yzt2-4}\nwenddeflinemarkup
+"database/sql"
+_ "github.com/mattn/go-sqlite3"
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{38}\nwdocspar
+
+
+We need a function to verify if the pkg-updated database already exists or not.
+Also we need a function to initialize an empty database.
+
+\nwenddocs{}\nwbegincode{39}\sublabel{NW1GrkFo-3oW9ND-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-3oW9ND-2}\nwenddeflinemarkup
+func CheckDatabase() int \{
+        _, err := os.Stat(config.DatabaseFile)
+        if os.IsNotExist(err) \{
+                return -1;
+        \}
+        return 0;
+\}
+
+func OpenDB(filename string) *sql.DB \{
+        db, err := sql.Open("sqlite3", filename);
+        if err != nil \{
+                log.Fatal(err);
+        \}
+        return db;
+\}
+
+func CreateDatabase(db *sql.DB) int \{
+        
+        \LA{}pkg-updated.go: sqlite-schema~{\nwtagstyle{}\subpageref{NW1GrkFo-Xky2k-1}}\RA{}
+
+        _, err := db.Exec(CreateSchemaStmt);
+        if err != nil \{
+                log.Printf("%q: %s\\n", err, CreateSchemaStmt)
+                return -1
+        \}       
+        return 0;
+\}
+\nwalsodefined{\\{NW1GrkFo-3oW9ND-2}\\{NW1GrkFo-3oW9ND-3}\\{NW1GrkFo-3oW9ND-4}\\{NW1GrkFo-3oW9ND-5}\\{NW1GrkFo-3oW9ND-6}\\{NW1GrkFo-3oW9ND-7}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{40}\nwdocspar
+
+In addition some other functions are needed, like add package with name and status, delete a package from database.
+The function {\Tt{}GetPackageInfo\nwendquote} is used to report the current informations of a package.
+
+\nwenddocs{}\nwbegincode{41}\sublabel{NW1GrkFo-2ea6on-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-2}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-1}{NW1GrkFo-2ea6on-3}\nwenddeflinemarkup
+// TODO: function + Return code         -> string, retcode/error
+// TODO: AddPackageDB: detect duplicate entries \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} avoid !!!
+// TODO: Use function handling with: func name(arg1 int, rest...);
+// 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
+\nwidentuses{\\{{\nwixident{and}}{and}}}\nwindexuse{\nwixident{and}}{and}{NW1GrkFo-2ea6on-2}\nwendcode{}\nwbegindocs{42}\nwdocspar
+
+We need a help function for count(*) because
+
+\nwenddocs{}\nwbegincode{43}\sublabel{NW1GrkFo-3oW9ND-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-2}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-1}{NW1GrkFo-3oW9ND-3}\nwenddeflinemarkup
+func CountRows(db *sql.DB, table string, column string, search string) int \{
+        var result int; 
+
+        err := db.QueryRow("SELECT count(*) FROM "+ table +" WHERE "+ column +" = '"+ search +"';").Scan(&result)
+        if err != nil \{
+                return -1;
+        \}
+
+fmt.Printf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d\\n", table, column, search, result);
+
+        return result
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{44}\nwdocspar
+
+First check if row exists, if not break an return "not exists";
+
+\nwenddocs{}\nwbegincode{45}\sublabel{NW1GrkFo-3oW9ND-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-3}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-2}{NW1GrkFo-3oW9ND-4}\nwenddeflinemarkup
+func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (string, error) \{
+        var (
+                result string;
+                res *string;
+                err error;
+                stmt *sql.Stmt;
+                count int;
+        )
+
+        if (len(opts) > 0) \{
+                if (len(opts) < 2) \{
+                        count = CountRows(db, opts[0], "name", pkgname);
+                \} else \{
+                        count = CountRows(db, opts[0], opts[1], pkgname);
+                \}
+        \} else \{
+                count = CountRows(db, "packages", "name", pkgname);
+        \}
+                        
+        if (count < 0) \{
+                result = "ENOSQLOUT";
+                return result, nil;
+        \}
+        
+        if (count == 0) \{
+                result = "ENOEXIST";
+                return result, nil;
+        \}
+
+        if (len(opts) > 0) \{
+                if (len(opts) < 2) \{
+                        stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE name = ?");
+                \} else \{
+                        stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE "+ opts[1] +" = ?");
+                \}
+        \} else \{
+                stmt, err = db.Prepare("SELECT "+field+" FROM packages WHERE name = ?");
+        \}
+        if err != nil \{
+                log.Fatal(err);
+                return result,fmt.Errorf("%s", err);
+        \}
+
+        err = stmt.QueryRow(pkgname).Scan(&res);
+
+        if (res != nil) \{
+                result = *res;
+        \} else \{
+                result = "NULL";
+                return result, nil;
+        \}
+        if err != nil \{
+                log.Fatal(err);
+                return result,fmt.Errorf("%s", err);
+        \}
+
+        return result, nil;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{46}\nwdocspar
+
+Add package and update package function !
+
+\nwenddocs{}\nwbegincode{47}\sublabel{NW1GrkFo-3oW9ND-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-4}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-3}{NW1GrkFo-3oW9ND-5}\nwenddeflinemarkup
+func AddPackage(db *sql.DB, name string, origin string, version string, status string) int \{    
+        tx, err := db.Begin();
+        if err != nil \{
+                log.Fatal(err);
+        \}
+        stmt, err := tx.Prepare("insert into packages(name, origin, version, status) values(?, ?, ?, ?)");
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        defer stmt.Close()
+        _, err = stmt.Exec(name, origin, version, status);
+
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        tx.Commit();
+                
+        return 0;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{48}\nwdocspar
+
+The {\Tt{}UpdatePackage\nwendquote} function is used to ....
+
+\nwenddocs{}\nwbegincode{49}\sublabel{NW1GrkFo-3oW9ND-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-5}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-4}{NW1GrkFo-3oW9ND-6}\nwenddeflinemarkup
+func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field string, where_value string, opts... string) int \{
+        var     query string;
+        
+        tx, err := db.Begin();
+        if err != nil \{
+                log.Fatal(err);
+        \}
+
+        if len(opts) > 0 \{
+                query = "UPDATE "+ opts[0] + " SET "+set_field+" = ? WHERE "+where_field+" = ?";        
+        \} else \{
+                query = "UPDATE packages SET "+set_field+" = ? WHERE "+where_field+" = ?";
+        \}
+
+/* DEBUG:        */
+fmt.Printf("sql query: %s | Params: %s;%s\\n", query, set_value, where_value);
+        
+        stmt, err := tx.Prepare(query);
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        defer stmt.Close()
+        _, err = stmt.Exec(set_value, where_value);
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        tx.Commit();
+        return 0;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{50}\nwdocspar
+
+Function to return all available package names as splice
+
+\nwenddocs{}\nwbegincode{51}\sublabel{NW1GrkFo-3oW9ND-6}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-6}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-5}{NW1GrkFo-3oW9ND-7}\nwenddeflinemarkup
+func GetAllPackages(db *sql.DB) ([]string, error)\{
+        var (
+                result []string;
+                name string;
+        )
+        
+        rows, err := db.Query("SELECT name FROM packages");
+        if err != nil \{
+                log.Fatal(err);
+                fmt.Errorf("%s", err);
+        \}
+        defer rows.Close();
+        
+        result = make([]string, 1)
+        tmp_result := make([]string, 1);
+        i := 0
+        for rows.Next() \{
+                rows.Scan(&name)
+                tmp_result[i] = name;
+                copy(result, tmp_result);
+                tmp_result = make([]string, len(result)+1);
+                copy(tmp_result, result);
+                result = make([]string, len(result)+1);
+                i++;
+        \}
+        result = make([]string, len(tmp_result)-1);
+        copy(result, tmp_result);
+        return result, err;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{52}\nwdocspar
+
+
+Add Service function !
+
+Need enable as parameter as soon as enabled service detection is ready and working:
+
+\nwenddocs{}\nwbegincode{53}\sublabel{NW1GrkFo-3oW9ND-7}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-7}}}\moddef{pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3oW9ND-6}{\relax}\nwenddeflinemarkup
+func AddService(db *sql.DB, name string, svccmd string, enabled int) int \{      
+// func AddService(db *sql.DB, name string, svccmd string) int \{        
+        tx, err := db.Begin();
+        if err != nil \{
+                log.Fatal(err);
+        \}
+        stmt, err := tx.Prepare("insert into services (name, svccmd, enabled) values (?, ?, ?)");
+//      stmt, err := tx.Prepare("insert into services (name, svccmd) values (?, ?)");
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        defer stmt.Close()
+        _, err = stmt.Exec(name, svccmd, enabled);
+//      _, err = stmt.Exec(name, svccmd);
+
+        if err != nil \{
+                log.Fatal(err);
+                return -1;
+        \}
+        tx.Commit();
+                
+        return 0;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{54}\nwdocspar
+
+\subsection{Schema layout description}
+
+Which fields are required for the pkg-update daemon it self.
+
+Packages Schema:
+
+- Installed package names and versions
+- Current status of a packages, (uptodate, update-available)
+- Index over the name field
+- Origin
+- Rollback-PkgFile
+- Lockstatus
+- Service Command svccmd
+
+Services Schema:
+- id
+- name
+- svccmd
+- enabled
+
+
+\nwenddocs{}\nwbegincode{55}\sublabel{NW1GrkFo-Xky2k-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-Xky2k-1}}}\moddef{pkg-updated.go: sqlite-schema~{\nwtagstyle{}\subpageref{NW1GrkFo-Xky2k-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-3oW9ND-1}}\nwenddeflinemarkup
+        CreateSchemaStmt := "CREATE TABLE packages (id INTEGER \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL PRIMARY KEY, name TEXT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL UNIQUE, origin TEXT, version TEXT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL, status TEXT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL PRIMARY KEY, name TEXT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} NULL, svccmd TEXT, enabled TEXT);";
+\nwused{\\{NW1GrkFo-3oW9ND-1}}\nwidentuses{\\{{\nwixident{NOT}}{NOT}}}\nwindexuse{\nwixident{NOT}}{NOT}{NW1GrkFo-Xky2k-1}\nwendcode{}\nwbegindocs{56}\nwdocspar
+
+\newpage
+\section{Detailed workflow}
+
+The main function.
+
+\nwenddocs{}\nwbegincode{57}\sublabel{NW1GrkFo-4eZMb4-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-4eZMb4-2}\nwenddeflinemarkup
+func main()\{
+\nwalsodefined{\\{NW1GrkFo-4eZMb4-2}\\{NW1GrkFo-4eZMb4-3}\\{NW1GrkFo-4eZMb4-4}\\{NW1GrkFo-4eZMb4-5}\\{NW1GrkFo-4eZMb4-6}\\{NW1GrkFo-4eZMb4-7}\\{NW1GrkFo-4eZMb4-8}\\{NW1GrkFo-4eZMb4-9}\\{NW1GrkFo-4eZMb4-A}\\{NW1GrkFo-4eZMb4-B}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{58}\nwdocspar
+
+At first, we read the configuration file and initialize the Database connections.
+
+\nwenddocs{}\nwbegincode{59}\sublabel{NW1GrkFo-4eZMb4-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-2}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-1}{NW1GrkFo-4eZMb4-3}\nwenddeflinemarkup
+        ret := ReadConfig();
+        fmt.Printf("Read Config: %d \\n", ret);
+        if ret != 0 \{
+                fmt.Printf("Failed to read configuration, stop working \\n");
+                os.Exit(2);
+        \}
+        db := OpenDB(config.DatabaseFile);
+        defer db.Close();
+
+        ret = CheckDatabase();  
+        fmt.Printf("Check Database: %d \\n", ret);
+        if ret != 0 \{
+                fmt.Printf("Create Database: ");
+                ret = CreateDatabase(db);
+                if ret != 0 \{
+                        fmt.Printf("failed\\n");
+                        os.Exit(2);
+                \} else \{
+                        fmt.Printf("done\\n");
+                \}
+        \}
+
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{60}\nwdocspar
+
+In every iteration round from daemon, we must syncronize the local package informations to the pkg-updated database.
+This is necessary, because pkg-updated will never touch the pkg databases it self, it will use his own.
+The syncronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
+
+%%The pkg-updated reads the local package database and check every package with the own database.
+%%If the package already exists in the pkg-updated database, the program will compare the version numbers.
+%%As long as the version numbers are the same, the program just will compare the status at least and update the status to "up-to-date" if this %%is not already the case.
+%%Should be the version number different, the pkg-updated will syncronize the version number an set the status to "up-to-date" as well.
+                        
+\nwenddocs{}\nwbegincode{61}\sublabel{NW1GrkFo-4eZMb4-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-3}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-2}{NW1GrkFo-4eZMb4-4}\nwenddeflinemarkup
+        SyncPkgDatabases(db);
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{62}\nwdocspar
+
+\nwenddocs{}\nwbegincode{63}\sublabel{NW1GrkFo-1ZnzCf-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1ZnzCf-1}}}\moddef{pkg-updated.go: syncdb~{\nwtagstyle{}\subpageref{NW1GrkFo-1ZnzCf-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-1ZnzCf-2}\nwenddeflinemarkup
+func SyncPkgDatabases(db *sql.DB) error \{
+        dbpkg := OpenDB(config.PkgDatabaseFile);
+        defer dbpkg.Close();
+
+        var (
+                lockstatus string;
+                pkglist []string;
+                err error;
+                request string;
+        )
+        
+        pkglist,err = GetAllPackages(db);
+
+        if (len(pkglist) > 1) \{
+                for _,name := range pkglist \{
+                        if lockstatus, err = GetPackageInfo(db, "lockstatus", name); err != nil \{       
+                                fmt.Println("Current Lockstatus: Error\\n");
+                        \}
+                        if (lockstatus == "1") \{
+                                fmt.Printf("Unlock excluded packages before sync: %s\\n", name)
+                                LockPackage(db, 0, name);
+                        \}
+                \}
+        \}
+                
+
+        if (config.ClearSyncDatabaseEnabled == true)\{
+                fmt.Println("Fresh pkg databases syncronize");  
+                fmt.Printf("Clear pkg-updated database: ");     
+
+                _, err = db.Exec("DELETE FROM packages");
+                if err != nil \{
+                        log.Printf("Error: %s\\n", err);
+                        return err;
+                \}       
+                fmt.Printf("done\\n");   
+        \} 
+
+        fmt.Printf("Start sync pkg database: ");        
+        rows, err := dbpkg.Query("SELECT name, version, origin, locked FROM packages");
+        if err != nil \{
+                log.Fatal(err);
+        \}
+        defer rows.Close();
+
+        var (
+                name string;
+                version string;
+                origin string;
+                locked int;
+        )
+        
+\nwalsodefined{\\{NW1GrkFo-1ZnzCf-2}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{64}\nwdocspar
+\nwenddocs{}\nwbegincode{65}\sublabel{NW1GrkFo-2ea6on-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-3}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-2}{NW1GrkFo-2ea6on-4}\nwenddeflinemarkup
+// 20160124: SyncPackageDB() -> Use messagequeue \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} go routine for faster copy process
+\nwidentuses{\\{{\nwixident{and}}{and}}}\nwindexuse{\nwixident{and}}{and}{NW1GrkFo-2ea6on-3}\nwendcode{}\nwbegindocs{66}\nwdocspar
+
+Sync all packages from system to pkg-updated db.
+Also update the lock.
+
+And, only update the informations if changes are detected otherwise leaf it as it is.
+If {\Tt{}fresh\ db\ sync\ on\ start\nwendquote} is enabled, the informations will add, because the DB is clear from begin the function
+
+\nwenddocs{}\nwbegincode{67}\sublabel{NW1GrkFo-1ZnzCf-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1ZnzCf-2}}}\moddef{pkg-updated.go: syncdb~{\nwtagstyle{}\subpageref{NW1GrkFo-1ZnzCf-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-1ZnzCf-1}{\relax}\nwenddeflinemarkup
+        for rows.Next() \{
+                rows.Scan(&name,&version,&origin,&locked);
+                request, err = GetPackageInfo(db, "name", name);
+                if (request != "ENOEXIST") \{
+                        request, err = GetPackageInfo(db, "version", name);
+                        if (request != version) \{
+                                UpdatePackage(db, "version", version, "name", name);
+                        \}
+                        request, err = GetPackageInfo(db, "origin", name);
+                        if (request != origin) \{
+                                UpdatePackage(db, "origin", origin, "name", name);
+                        \}                       
+                        request, err = GetPackageInfo(db, "status", name);
+                        if (request == "update-available") \{
+                                UpdatePackage(db, "status", "up-to-date", "name", name);
+                        \}
+                \} else \{
+                        AddPackage(db, name, origin, version, "up-to-date");
+                \}
+
+                if (locked != 0) \{
+                        UpdatePackage(db, "lockstatus", "2", "name", name);
+                \}
+        \}
+        fmt.Printf("done\\n");   
+        return nil;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{68}\nwdocspar
+
+After syncronization, we are ready for check available updates.
+This job can do by pkg program it self, we just need the output.
+The commands to run are: {\Tt{}pkg\ version\nwendquote}
+
+\nwenddocs{}\nwbegincode{69}\sublabel{NW1GrkFo-23yzt2-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-4}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-23yzt2-3}{NW1GrkFo-23yzt2-5}\nwenddeflinemarkup
+"os/exec"
+"bytes"
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{70}\nwdocspar
+
+We extract all available updates from pkg version command and update this information inside the DB.
+For the extraction, we parse the whole output from the exec command.
+
+\nwenddocs{}\nwbegincode{71}\sublabel{NW1GrkFo-3Sld4X-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3Sld4X-1}}}\moddef{pkg-updated.go: check-updates~{\nwtagstyle{}\subpageref{NW1GrkFo-3Sld4X-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-3Sld4X-2}\nwenddeflinemarkup
+func CheckUpdates(db *sql.DB)\{
+        var (
+                cmdOut string
+                err    error
+        )
+
+        cmdOut, err = RunCmd("version");
+
+        if err != nil \{
+                fmt.Fprintln(os.Stderr, "There was an error running pkg command: ", err, cmdOut)
+        \}
+
+\nwalsodefined{\\{NW1GrkFo-3Sld4X-2}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{72}\nwdocspar
+\nwenddocs{}\nwbegincode{73}\sublabel{NW1GrkFo-2ea6on-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-4}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-3}{NW1GrkFo-2ea6on-5}\nwenddeflinemarkup
+// 20160215: Use bytes.Buffer for cmdOut parsings at all instead concat or string append
+\nwendcode{}\nwbegindocs{74}\nwdocspar
+
+\nwenddocs{}\nwbegincode{75}\sublabel{NW1GrkFo-3Sld4X-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3Sld4X-2}}}\moddef{pkg-updated.go: check-updates~{\nwtagstyle{}\subpageref{NW1GrkFo-3Sld4X-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-3Sld4X-1}{\relax}\nwenddeflinemarkup
+        sha := string(cmdOut);
+        var pkgs [][]byte;
+        pkgs = make([][]byte, 1);
+        x := 0;
+        for n:=0;n<len(sha);n++ \{
+                if (sha[n] == 60) \{
+                        UpdatePackage(db, "status", "update-available", "origin", string(pkgs[x]));
+                        npkgs := make([][]byte, len(pkgs)+1);
+                        x++;
+                        copy(npkgs, pkgs);
+                        pkgs = npkgs;
+                        pkgs[x] = make([]byte, 1);
+                        continue;
+                \}
+                if (sha[n] == 10) \{
+                        pkgs[x] = nil;
+                        continue;
+                \}
+                if (sha[n] != 32) \{
+                        pkgs[x] = append(pkgs[x], sha[n]);
+                \}
+        \}
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{76}\nwdocspar
+
+\nwenddocs{}\nwbegincode{77}\sublabel{NW1GrkFo-4eZMb4-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-4}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-3}{NW1GrkFo-4eZMb4-5}\nwenddeflinemarkup
+        CheckUpdates(db)
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{78}\nwdocspar
+
+
+\newpage
+\subsection{The update process}
+
+1. Save installed packages
+
+All packages where an update is available, the pkg-updated will create a rollback package in case the upgrade will fail and the old package needs to installed again. The pkg system does not support downgrade options right now.
+
+\nwenddocs{}\nwbegincode{79}\sublabel{NW1GrkFo-2BPGtT-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\moddef{pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-2BPGtT-2}\nwenddeflinemarkup
+func GetUpdateList(db *sql.DB) ([]string, error)\{
+        var list []string
+        var name string
+        list = make([]string, 0)
+        var nlist []string;
+
+        rows, err := db.Query("SELECT name FROM packages WHERE status = $1", "update-available")
+        if err != nil \{
+                log.Fatal(err)
+                return list, fmt.Errorf("%s", err)
+        \}
+        defer rows.Close()
+        
+        for rows.Next() \{
+
+// DEBUG
+//              fmt.Printf("Liste: %d\\n", len(list));
+
+                nlist = make([]string, len(list)+1);
+                copy(nlist,list);
+                list = nlist;
+                err = rows.Scan(&name)
+                if err != nil \{
+                        log.Fatal(err)
+                        return list, fmt.Errorf("%s", err)
+                \}
+                list[len(list)-1] = name
+        \}
+        return list, nil
+\}
+\nwalsodefined{\\{NW1GrkFo-2BPGtT-2}\\{NW1GrkFo-2BPGtT-3}\\{NW1GrkFo-2BPGtT-4}\\{NW1GrkFo-2BPGtT-5}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{80}\nwdocspar
+
+Iterate through the package list which marked as update-available.
+Create the archive packages for backup and save the archive path and file back to database.
+Before start with archive packages, we check if the package already exists
+
+\nwenddocs{}\nwbegincode{81}\sublabel{NW1GrkFo-2BPGtT-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-2}}}\moddef{pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-2BPGtT-1}{NW1GrkFo-2BPGtT-3}\nwenddeflinemarkup
+func SavePackages(db *sql.DB)\{
+        var (
+                version string;
+                origin string;
+                path string;
+                index int;
+        )
+
+        updatelist, err := GetUpdateList(db);
+        if err != nil \{
+                fmt.Printf("SavePackages() Error: GetUpdateList(): %v\\n", err);
+        \}
+
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{82}\nwdocspar
+\nwenddocs{}\nwbegincode{83}\sublabel{NW1GrkFo-2ea6on-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-5}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-4}{NW1GrkFo-2ea6on-6}\nwenddeflinemarkup
+// TODO: Put name \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} version in a 2d slice/array as return from GetUpdateList() !
+\nwidentuses{\\{{\nwixident{and}}{and}}}\nwindexuse{\nwixident{and}}{and}{NW1GrkFo-2ea6on-5}\nwendcode{}\nwbegindocs{84}\nwdocspar
+
+\nwenddocs{}\nwbegincode{85}\sublabel{NW1GrkFo-2BPGtT-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-3}}}\moddef{pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-2BPGtT-2}{NW1GrkFo-2BPGtT-4}\nwenddeflinemarkup
+        for _, pkg := range updatelist \{
+                version, err = GetPackageInfo(db, "version", pkg);
+                path = config.ArchiveFile + "/" + pkg + "-" + version + ".txz";
+                if _, err := os.Stat(path); err != nil \{
+                        RunCmd("create", config.ArchiveFile, pkg)
+                        index++;
+                \}
+        \}
+
+        for _, pkg := range updatelist \{
+                version, err = GetPackageInfo(db, "version", pkg);
+                path = config.ArchiveFile + "/" + pkg + "-" + version + ".txz";
+                if _, err := os.Stat(path); err == nil \{
+                        origin, err = GetPackageInfo(db, "origin", pkg);
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{86}\nwdocspar
+\nwenddocs{}\nwbegincode{87}\sublabel{NW1GrkFo-2ea6on-6}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-6}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-5}{NW1GrkFo-2ea6on-7}\nwenddeflinemarkup
+// TODO: Need to use nil error return correctly !
+\nwendcode{}\nwbegindocs{88}\nwdocspar
+\nwenddocs{}\nwbegincode{89}\sublabel{NW1GrkFo-2BPGtT-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-4}}}\moddef{pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-2BPGtT-3}{NW1GrkFo-2BPGtT-5}\nwenddeflinemarkup
+//                      if err != nil \{
+                                UpdatePackage(db, "archivepath", path, "origin", origin)
+//                              UpdatePackage(db, origin, "archive", path)
+//                      \}               
+                \} else \{
+                        fmt.Printf("Could not found rollback package file: %s\\n", path);
+                \}
+        \}       
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{90}\nwdocspar
+
+\nwenddocs{}\nwbegincode{91}\sublabel{NW1GrkFo-4eZMb4-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-5}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-4}{NW1GrkFo-4eZMb4-6}\nwenddeflinemarkup
+        if (config.ArchiveEnable) \{
+                SavePackages(db);
+        \}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{92}\nwdocspar
+
+Start to lock exclude packages
+
+\nwenddocs{}\nwbegincode{93}\sublabel{NW1GrkFo-4eZMb4-6}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-6}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-5}{NW1GrkFo-4eZMb4-7}\nwenddeflinemarkup
+        \LA{}pkg-updated.go: lockexclude~{\nwtagstyle{}\subpageref{NW1GrkFo-3YfAR2-1}}\RA{}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{94}\nwdocspar
+
+
+2. Start Update and analyze output
+The upgrade process it self is quiet simple a runcmd step only
+
+\nwenddocs{}\nwbegincode{95}\sublabel{NW1GrkFo-2BPGtT-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-5}}}\moddef{pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-2BPGtT-4}{\relax}\nwenddeflinemarkup
+func Upgrade()\{
+        var (
+                cmdOut string;
+                err error;
+        )
+        cmdOut, err = RunCmd("upgrade");
+        fmt.Printf("Output Upgrade(): %s\\n", cmdOut);
+        if err != nil \{
+                fmt.Fprintln(os.Stderr, "Error: ", string(cmdOut), err)
+        \}
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{96}\nwdocspar
+
+Test Upgrade and sync DB
+
+\nwenddocs{}\nwbegincode{97}\sublabel{NW1GrkFo-4eZMb4-7}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-7}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-6}{NW1GrkFo-4eZMb4-8}\nwenddeflinemarkup
+        Upgrade();
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{98}\nwdocspar
+After upgrade, sync the database again, question is:
+
+Do we need to sync from fresh ? (check needed)
+Otherwise the DB will corrupt after a while.
+Problems with sync and clear DB:
+- The rollback paths will gone
+
+\nwenddocs{}\nwbegincode{99}\sublabel{NW1GrkFo-4eZMb4-8}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-8}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-7}{NW1GrkFo-4eZMb4-9}\nwenddeflinemarkup
+        // Second RUN:
+        if (config.ClearSyncDatabaseEnabled == true) \{
+                config.ClearSyncDatabaseEnabled = false;
+        \}
+        SyncPkgDatabases(db);
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{100}\nwdocspar
+
+Start to unlock exclude packages
+
+\nwenddocs{}\nwbegincode{101}\sublabel{NW1GrkFo-4eZMb4-9}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-9}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-8}{NW1GrkFo-4eZMb4-A}\nwenddeflinemarkup
+        \LA{}pkg-updated.go: unlockexclude~{\nwtagstyle{}\subpageref{NW1GrkFo-3tlxMz-1}}\RA{}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{102}\nwdocspar
+
+3. Downgrade failed updates, needed for late usage
+
+\nwenddocs{}\nwbegincode{103}\sublabel{NW1GrkFo-442Uld-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-442Uld-1}}}\moddef{pkg-updated.go: rollback~{\nwtagstyle{}\subpageref{NW1GrkFo-442Uld-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+func RollbackPackage(db *sql.DB, name string)\{
+        var (
+                path string;
+                cmdOut string;
+                err error;              
+        )
+        
+        if path, err = GetPackageInfo(db, "archivepath", name); err != nil \{
+                fmt.Printf("Error: %v\\n", err);
+        \}
+        
+        if (path == "NULL") \{
+                fmt.Printf("Rollback Error: No rollback pkg available for package %s\\n", name);
+                return;
+        \}
+        fmt.Printf("Rollback package: %s , pkg: %s\\n",name, path);
+                
+        if cmdOut, err = RunCmd("install", path); err != nil \{  
+                fmt.Fprintln(os.Stderr, "Error: ", err)
+        \}
+
+        /* Set status for success rollback
+         else \{
+                UpdatePackage(db, "status", "update-available", "name", name);
+        \}
+        */
+
+        fmt.Printf("Output: %s\\n", string(cmdOut));
+        return;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{104}\nwdocspar
+
+\nwenddocs{}\nwbegincode{105}\sublabel{NW1GrkFo-2ea6on-7}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-7}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-6}{NW1GrkFo-2ea6on-8}\nwenddeflinemarkup
+// 20160201: Implement error handling
+\nwendcode{}\nwbegindocs{106}\nwdocspar
+
+
+\subsubsection{Exclude packages from update process}
+
+Excluded packages must be protect for depencies from other packages during the update process.
+The best option to do that is, the we lock the package in the pkg database directly.
+
+{\Tt{}pkg\ lock\nwendquote} ist the Command for doing this
+
+But we must unlock the package after the update/upgrade is done.
+
+And, we must be sure, that already locked packages are not unlocked.
+So we must save the current lock before begin to lock excluded packages.
+And we must unlock the packages again, except of already locked packages after upgrade is done
+
+%Under some circumstances, you do not want to update packages automatically.
+%For this case, the pkg system have a lock feature, which we can use to lock packages before we update the packages.
+%Afterwards the package will unlocked.
+%One problem must be tackled anyhow. 
+%If a packaged already locked before pkg-updated is running, the program must keep the lock status after update is done.
+%So we check all current locked packages and save this information into the pkg-update db.
+
+First of all, we need a function to set and get the lockstatus.
+I decide to use one function to use, because locking is either set or you just want to know the status.
+
+There are three states {\Tt{}empty\nwendquote}, {\Tt{}locked\nwendquote} and {\Tt{}systemlock\nwendquote}. 
+If a package is not locked, the state is empty. If a package is in the exclude list from the pkg-updated.conf, the status is set to locked.
+The third status is systemlocked and means packages which are already locked on the local repo.
+Packages which are marked as locked on the systemlevel will not unlocked after upgrade process, all other packages will unlocked.
+
+        Use case:
+                - pkg-updated set lock status from excluded list and breaks
+                on the next run, the syncdb will mark the package as systemlocked instead normal locked.
+                -> This needs to be handled in syncdb()
+
+Steps need in LockPackage:
+- First check the current status
+- If already locked and the target state
+:
+:
+
+\nwenddocs{}\nwbegincode{107}\sublabel{NW1GrkFo-zKPPD-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-1}}}\moddef{pkg-updated.go: lock~{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-zKPPD-2}\nwenddeflinemarkup
+func LockPackage(db *sql.DB, lock int, name string) string \{
+        var (
+                lockstatus string;
+                err error;
+        )
+
+        if lockstatus, err = GetPackageInfo(db, "lockstatus", name); err != nil \{       
+                fmt.Println("LockPackage() Error\\n");
+        \}
+        if (lockstatus == "ENOEXIST") \{
+                lockstatus = "Package not exists"
+                return lockstatus;
+        \}       
+        
+        if (lockstatus == "2") \{
+                lockstatus = "systemlocked";
+                return lockstatus;
+        \}
+
+\nwalsodefined{\\{NW1GrkFo-zKPPD-2}\\{NW1GrkFo-zKPPD-3}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{108}\nwdocspar
+\nwenddocs{}\nwbegincode{109}\sublabel{NW1GrkFo-2ea6on-8}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-8}}}\moddef{TODO~{\nwtagstyle{}\subpageref{NW1GrkFo-2ea6on-1}}}\plusendmoddef\nwstartdeflinemarkup\nwprevnextdefs{NW1GrkFo-2ea6on-7}{\relax}\nwenddeflinemarkup
+// 20160209: Improve string/int usage in LockPackage
+\nwendcode{}\nwbegindocs{110}\nwdocspar
+
+\nwenddocs{}\nwbegincode{111}\sublabel{NW1GrkFo-zKPPD-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-2}}}\moddef{pkg-updated.go: lock~{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-zKPPD-1}{NW1GrkFo-zKPPD-3}\nwenddeflinemarkup
+        switch lock \{
+                case 0:
+                        if _, err = RunCmd("unlock", name); err != nil \{        
+                                fmt.Printf("Unlock package: %s\\n", name)
+                                fmt.Fprintln(os.Stderr, "Unlock pkg Error: ", err)
+                        \}                               
+
+                case 1:
+                        if _, err = RunCmd("lock", name); err != nil \{  
+                                fmt.Println("Lock package cmd: %v", name)
+                                fmt.Fprintln(os.Stderr, "Error: ", err)
+                        \}       
+                default:
+                        lockstatus = "Not supported lock mode";
+                        return lockstatus;
+        \}
+        
+        setlock := strconv.Itoa(lock);
+        
+        UpdatePackage(db, "lockstatus", setlock, "name", name);
+
+        lockstatus,err = GetPackageInfo(db, "lockstatus", name);
+
+        switch lockstatus \{
+                case "NULL":
+                        lockstatus = "Not locked";
+                case "ENOEXIST":
+                        lockstatus = "Packages does not exists or unlocked";
+                case "1":
+                        lockstatus = "Locked";          
+                case "2":
+                        lockstatus = "Systemlocked";
+                default:
+                        lockstatus = "Unknown lock status";             
+        \}
+        return lockstatus;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{112}\nwdocspar
+
+Now lets iterate the exclude list and mark the package as locked in the local pkg repo.
+
+\nwenddocs{}\nwbegincode{113}\sublabel{NW1GrkFo-zKPPD-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-3}}}\moddef{pkg-updated.go: lock~{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-zKPPD-2}{\relax}\nwenddeflinemarkup
+func LockExclude(db *sql.DB, lock int) \{
+        var mode string;
+        switch lock \{
+                case 0:
+                        mode = "Unlock";
+                case 1:
+                        mode = "Lock";
+                default:
+                        fmt.Printf("Not supported");
+                        return;                 
+        \}
+        for _,name := range config.ExcludePackages \{
+                fmt.Printf("%s exclude package %s: %s\\n", mode, name, LockPackage(db, lock, name));
+        \}
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{114}\nwdocspar
+\nwenddocs{}\nwbegincode{115}\sublabel{NW1GrkFo-3YfAR2-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3YfAR2-1}}}\moddef{pkg-updated.go: lockexclude~{\nwtagstyle{}\subpageref{NW1GrkFo-3YfAR2-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-4eZMb4-6}}\nwenddeflinemarkup
+        LockExclude(db,1);
+\nwused{\\{NW1GrkFo-4eZMb4-6}}\nwendcode{}\nwbegindocs{116}\nwdocspar
+
+\nwenddocs{}\nwbegincode{117}\sublabel{NW1GrkFo-3tlxMz-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-3tlxMz-1}}}\moddef{pkg-updated.go: unlockexclude~{\nwtagstyle{}\subpageref{NW1GrkFo-3tlxMz-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-4eZMb4-9}}\nwenddeflinemarkup
+//      LockExclude(db,0);
+\nwused{\\{NW1GrkFo-4eZMb4-9}}\nwendcode{}\nwbegindocs{118}\nwdocspar
+
+
+
+Start syncing services
+
+\nwenddocs{}\nwbegincode{119}\sublabel{NW1GrkFo-4eZMb4-A}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-A}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-9}{NW1GrkFo-4eZMb4-B}\nwenddeflinemarkup
+        // First Run
+        if (config.ClearSyncDatabaseEnabled == false) \{
+                config.ClearSyncDatabaseEnabled = true;
+        \}
+        ScanEnabledServices(db);
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{120}\nwdocspar
+
+Now close the main function
+
+\nwenddocs{}\nwbegincode{121}\sublabel{NW1GrkFo-4eZMb4-B}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-B}}}\moddef{pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-4eZMb4-A}{\relax}\nwenddeflinemarkup
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{122}\nwdocspar
+
+\subsection{The daemon}
+
+What needs to be run inside the loop ?
+How to control the daemon ?
+
+Really needed ?
+FreeBSD have the daemon command.
+
+\subsection{The scheduled updated}
+
+If configured, the daemon are allowed to start the update if the time reached.
+How to handle the timing exact ?
+
+Open Questions: 
+- What happen during time change ?
+- What happen during Winter/Summer Time switch ?
+
+Example problem:
+
+On the last Sunday in March, the clock from the server will change during the night from 02:00 to 03:00 o`clock.
+If pkg-updated is configured to start the update @02:15 am, the scheduled job must start/handle somehow.
+
+Or the time needs to be reset cause of wrongly configured.
+
+How the scheduler should work:
+
+- Scan current time
+- Check time with restart job
+- If time is reached -> Start
+
+Possible schedule options:
+
+- Every x Minutes / Hours
+- One time in the Day (every 24h)
+
+- Format:
+
+- Go time formats, ....
+
+Simple approach:
+
+import "time"
+
+func main() {
+        go heartBeat()
+        time.Sleep(time.Second * 5)
+}
+func heartBeat(){
+    for range time.Tick(time.Second *1){
+        fmt.Println("Foo")
+    }
+}
+
+What should run during each check ?
+- new updates available ? -> Update()
+- 
+
+
+\nwenddocs{}\nwbegincode{123}\sublabel{NW1GrkFo-37IcF6-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-37IcF6-1}}}\moddef{pkg-updated.go: scheduler~{\nwtagstyle{}\subpageref{NW1GrkFo-37IcF6-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{124}\nwdocspar
+
+
+\newpage
+\subsection{Update running services}
+
+What we need to do here.
+
+First we need to determine if a service is related to the installed packages.
+This can be done by check files under /usr/local/etc/rc.d directory.
+
+Second, we check which package have this service file provided 
+
+Third, update the database with the related service script
+
+In the last step, the service needs to restart after update(), and only if package was updated
+For this, we can check the update-available status from the db.
+
+We need a function to restart a service
+We need a function to detect installed and enabled services
+
+
+- Detect package names form service scripts
+        pkg which /usr/local/etc/rc.d/vboxnet
+
+- Detect enabled services:
+check rcvar
+check enabled
+        if enabled -> check daemon is running
+                if daemon is running, 
+
+\nwenddocs{}\nwbegincode{125}\sublabel{NW1GrkFo-23yzt2-5}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-5}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-23yzt2-4}{NW1GrkFo-23yzt2-6}\nwenddeflinemarkup
+"io/ioutil"
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{126}\nwdocspar
+                
+                
+\nwenddocs{}\nwbegincode{127}\sublabel{NW1GrkFo-DN2n-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}}\moddef{pkg-updated.go: services~{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{\relax}{NW1GrkFo-DN2n-2}\nwenddeflinemarkup
+/*func RestartService(db *sql.DB, name)\{
+        if (config.RestartDaemons == true) \{
+                return; 
+        \}
+        return;
+\}*/
+\nwalsodefined{\\{NW1GrkFo-DN2n-2}\\{NW1GrkFo-DN2n-3}\\{NW1GrkFo-DN2n-4}}\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{128}\nwdocspar
+
+Search the related packages from the service scripts from in the directory /usr/local/etc/rc.d
+One problem could be appear if a pkg have more then one service script, like apache have (apache and htcacheclean).
+
+\nwenddocs{}\nwbegincode{129}\sublabel{NW1GrkFo-DN2n-2}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-2}}}\moddef{pkg-updated.go: services~{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-DN2n-1}{NW1GrkFo-DN2n-3}\nwenddeflinemarkup
+func ScanEnabledServices(db *sql.DB)\{
+        fmt.Printf("SES: Start");
+
+        if (config.RestartDaemons == true) \{
+                var (
+                        pkgorigin string;
+                        pkgname string; 
+                        ret int;
+                        err error;
+                        enabled int;
+                        cmdout string;
+                )
+                enabled = 0;
+
+fmt.Printf("SVC: Clear service table: \\n");     
+                
+                _, err = db.Exec("DELETE FROM services");
+                if err != nil \{
+                        log.Printf("Error: %s\\n", err);
+                        return;
+                \}       
+                fmt.Printf("done\\n");
+                
+                absolute := "/usr/local/etc/rc.d/";                             
+                files,_ := ioutil.ReadDir(absolute)
+                
+                for _, f := range files \{
+                        if (f.IsDir() == false) \{
+                                svc := absolute + f.Name();
+                                pkgorigin, err = RunCmd("which", svc);
+                                if err == nil \{
+
+                                        pkgname, err = GetPackageInfo(db, "name", chop(pkgorigin), "packages", "origin");
+
+fmt.Printf("SVC: Pkgname for origin %s: %s\\n", chop(pkgorigin), pkgname);
+fmt.Printf("SVC: Add %s: %s\\n", pkgname, svc);
+
+                                        if ret,cmdout,err = ScanScript(svc, cmdout); ret != 0 \{
+                                                fmt.Printf("SVC: %s is enabled\\n", svc);
+                                                enabled = 1;
+                                        \} else \{
+                                                fmt.Printf("SVC: %s not is enabled\\n", svc);
+                                                enabled = 0;                            
+                                        \}
+                                        AddService(db, pkgname, svc, enabled);
+                                \}
+                        \}
+                \}               
+        \}
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{130}\nwdocspar
+
+Detection of enabled services.
+How to detect enabled services ?
+We use {\Tt{}service\ -e\nwendquote} command on FreeBSD to detect enabled Services.
+The output from the command will parse and if the service is enabled, the function {\Tt{}ScanScript\nwendquote} will return 1 for found and 0 for not-found.
+To reduce the cmd calls from {\Tt{}RunCMD\nwendquote} function, the cmdout will returned and can be handover again in an upper iteration {\Tt{}ScanEnabledServices\nwendquote}
+
+\nwenddocs{}\nwbegincode{131}\sublabel{NW1GrkFo-DN2n-3}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-3}}}\moddef{pkg-updated.go: services~{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-DN2n-2}{NW1GrkFo-DN2n-4}\nwenddeflinemarkup
+func ScanScript(path string, preout string) (int, string, error) \{
+        var (
+                err error;
+        )
+        var cmdOut string;
+        if (preout != "") \{
+                cmdOut = preout;
+        \} else \{
+                cmdOut,err = RunCmd("service", "");
+        \}
+
+        if err != nil \{
+                return -1, cmdOut, err;
+        \}
+
+        var buffer bytes.Buffer
+        for _, val := range cmdOut \{
+                if (val == 10) \{
+                        if(buffer.String() == path) \{
+                                return 1,cmdOut,nil;
+                        \}
+                        buffer.Reset();
+                        continue;
+                \}
+                buffer.WriteString(string(val))
+        \}
+        return 0, cmdOut, nil;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{132}\nwdocspar
+
+Server restart function.
+
+\nwenddocs{}\nwbegincode{133}\sublabel{NW1GrkFo-DN2n-4}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-4}}}\moddef{pkg-updated.go: services~{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-DN2n-3}{\relax}\nwenddeflinemarkup
+func ScanScript(svc string) (int, error) \{
+        var (
+                err error;
+        )
+        var cmdOut string;
+        cmdOut,err = RunCmd("restart", svc);
+        if err != nil \{
+                fmt.Printf("SVC: Could not restart: %s\\n", svc);
+        \}
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{134}\nwdocspar
+
+\newpage
+\subsection{Reporting}
+
+Ideas:
+
+- define types (events, ...)
+- Create extra db for output (date-time, type, facility, message) (like syslog)
+- Log all reports to db
+- create extra program for extra files from db and print out
+
+
+For general reporting, we need a logging to file function
+First we need the module for log.
+
+\nwenddocs{}\nwbegincode{135}\sublabel{NW1GrkFo-23yzt2-6}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-6}}}\moddef{pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}}\plusendmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwprevnextdefs{NW1GrkFo-23yzt2-5}{\relax}\nwenddeflinemarkup
+"log"
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{136}\nwdocspar
+
+The logging function does .....
+
+\nwenddocs{}\nwbegincode{137}\sublabel{NW1GrkFo-49a3GF-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-49a3GF-1}}}\moddef{pkg-updated.go: logging~{\nwtagstyle{}\subpageref{NW1GrkFo-49a3GF-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+
+func logging(text string)\{
+        return;
+\}
+
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{138}\nwdocspar
+
+\newpage
+\subsection{Helper functions}
+
+For running shell commands and reduce code, need a function to do all the necessary steps
+
+\nwenddocs{}\nwbegincode{139}\sublabel{NW1GrkFo-2oiMyj-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-2oiMyj-1}}}\moddef{pkg-updated.go: runcmd~{\nwtagstyle{}\subpageref{NW1GrkFo-2oiMyj-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+func RunCmd(cmd string, opts... string) (string, error) \{
+        var (
+                cmdName string;
+                cmdArgs []string;
+                cmdOut []byte;
+                err error;
+                cmdArg1 []string;
+        )
+        cmdName = "pkg";
+
+        switch cmd \{
+                case "install":
+                        cmdArg1 = []string\{"install", "-y", "-f"\};
+                case "update":
+                        cmdArg1 = []string\{"update", "-y", "-f"\};
+                case "lock":
+                        cmdArg1 = []string\{"lock", "-y"\};
+                case "unlock":
+                        cmdArg1 = []string\{"unlock", "-y"\};
+                case "upgrade":
+                        cmdArg1 = []string\{"upgrade", "-y"\};
+                case "create":
+                        cmdArg1 = []string\{"create", "-o"\};                     
+                case "version":
+                        cmdArg1 = []string\{"version", "-Rov"\}
+                case "which":
+                        cmdArg1 = []string\{"which", "-qo"\}
+                case "service":
+                        cmdName = "service";
+                        cmdArg1 = []string\{"-e"\};
+        \}
+        
+        if (config.UseSudo == true) \{
+                cmdArgs = make([]string, len(cmdArg1)+1);
+                cmdArgs[0] = cmdName;
+                cmdName = "sudo";
+                copy(cmdArgs[1:], cmdArg1);
+        \} else \{
+                cmdArgs = make([]string, len(cmdArg1));
+                copy(cmdArgs, cmdArg1);
+        \}
+
+        cmdArgs = append(cmdArgs, opts...);
+        
+/* DEBUG: */    
+        fmt.Printf("cmd: %s ", cmdName);
+        for _,value := range cmdArgs \{
+                fmt.Printf("%s ", value)
+        \}
+        fmt.Printf("\\n");
+
+        cmdOut, err = exec.Command(cmdName, cmdArgs...).CombinedOutput(); 
+
+        return string(cmdOut), err;
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{140}\nwdocspar
+
+A small chop function
+
+\nwenddocs{}\nwbegincode{141}\sublabel{NW1GrkFo-39UGcF-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-39UGcF-1}}}\moddef{pkg-updated.go: chop~{\nwtagstyle{}\subpageref{NW1GrkFo-39UGcF-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+func chop(s string) string \{
+        return s[0:len(s)-1]
+\}
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwendcode{}\nwbegindocs{142}\nwdocspar
+
+
+\newpage
+\section{Installation of pkg-updated}
+
+....
+
+\subsection{Install from source}
+
+
+\subsection{Install from pkg-repo}
+
+\subsection{Install from Ports}
+
+
+\newpage
+\section{The basic pkg-updated program structure}
+
+The pkg-update daemon program is written in golang.
+The skeleton of the the program is described here.
+
+\nwenddocs{}\nwbegincode{143}\sublabel{NW1GrkFo-1XrNH2-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-1XrNH2-1}}}\moddef{pkg-updated.go~{\nwtagstyle{}\subpageref{NW1GrkFo-1XrNH2-1}}}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\LA{}license~{\nwtagstyle{}\subpageref{NW1GrkFo-ZXuKx-1}}\RA{}
+
+package main
+
+import (
+        \LA{}pkg-updated.go: modules~{\nwtagstyle{}\subpageref{NW1GrkFo-23yzt2-1}}\RA{}
+);
+
+\LA{}version~{\nwtagstyle{}\subpageref{NW1GrkFo-3iHmBG-1}}\RA{}
+\LA{}pkg-updated.go: variables~{\nwtagstyle{}\subpageref{NW1GrkFo-2h7kw1-1}}\RA{}
+\LA{}pkg-updated.go: readconfig~{\nwtagstyle{}\subpageref{NW1GrkFo-3u3wI7-1}}\RA{}
+\LA{}pkg-updated.go: sqlite-connect~{\nwtagstyle{}\subpageref{NW1GrkFo-3oW9ND-1}}\RA{}
+\LA{}pkg-updated.go: logging~{\nwtagstyle{}\subpageref{NW1GrkFo-49a3GF-1}}\RA{}
+\LA{}pkg-updated.go: runcmd~{\nwtagstyle{}\subpageref{NW1GrkFo-2oiMyj-1}}\RA{}
+\LA{}pkg-updated.go: chop~{\nwtagstyle{}\subpageref{NW1GrkFo-39UGcF-1}}\RA{}
+\LA{}pkg-updated.go: syncdb~{\nwtagstyle{}\subpageref{NW1GrkFo-1ZnzCf-1}}\RA{}
+\LA{}pkg-updated.go: check-updates~{\nwtagstyle{}\subpageref{NW1GrkFo-3Sld4X-1}}\RA{}
+\LA{}pkg-updated.go: lock~{\nwtagstyle{}\subpageref{NW1GrkFo-zKPPD-1}}\RA{}
+\LA{}pkg-updated.go: rollback~{\nwtagstyle{}\subpageref{NW1GrkFo-442Uld-1}}\RA{}
+\LA{}pkg-updated.go: scheduler~{\nwtagstyle{}\subpageref{NW1GrkFo-37IcF6-1}}\RA{}
+\LA{}pkg-updated.go: services~{\nwtagstyle{}\subpageref{NW1GrkFo-DN2n-1}}\RA{}
+\LA{}pkg-updated.go: update~{\nwtagstyle{}\subpageref{NW1GrkFo-2BPGtT-1}}\RA{}
+
+\LA{}pkg-updated.go: main~{\nwtagstyle{}\subpageref{NW1GrkFo-4eZMb4-1}}\RA{}
+\nwnotused{pkg-updated.go}\nwendcode{}\nwbegindocs{144}\nwdocspar
+
+
+\newpage
+\section{License}
+
+\nwenddocs{}\nwbegincode{145}\sublabel{NW1GrkFo-ZXuKx-1}\nwmargintag{{\nwtagstyle{}\subpageref{NW1GrkFo-ZXuKx-1}}}\moddef{license~{\nwtagstyle{}\subpageref{NW1GrkFo-ZXuKx-1}}}\endmoddef\nwstartdeflinemarkup\nwusesondefline{\\{NW1GrkFo-1XrNH2-1}}\nwenddeflinemarkup
+/* 
+Copyright (\nwlinkedidentc{c}{NW1GrkFo-ZXuKx-1}) SCD-SYSTEMS.NET\nwindexdefn{\nwixident{c}}{c}{NW1GrkFo-ZXuKx-1}
+
+The \nwlinkedidentc{Regents}{NW1GrkFo-ZXuKx-1} of the University of California. \nwindexdefn{\nwixident{Regents}}{Regents}{NW1GrkFo-ZXuKx-1}
+All \nwlinkedidentc{rights}{NW1GrkFo-ZXuKx-1} reserved.\nwindexdefn{\nwixident{rights}}{rights}{NW1GrkFo-ZXuKx-1}
+
+Redistribution \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} use in source \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} binary forms, with \nwindexdefn{\nwixident{and}}{and}{NW1GrkFo-ZXuKx-1}
+or without modification, are permitted provided that the 
+following conditions are met:
+
+1. Redistributions of source code must retain the above 
+copyright notice, this list of conditions \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} 
+the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above 
+copyright notice, this list of conditions \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} the following 
+disclaimer in the documentation \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1}/or other materials 
+provided with the distribution.
+
+3. All advertising materials mentioning features or use 
+of this software must display the following 
+acknowledgement: "This product includes software developed 
+by the University of California, Berkeley \nwlinkedidentc{and}{NW1GrkFo-ZXuKx-1} 
+its contributors."
+
+4. Neither the name of the University nor the names 
+of its contributors may be used to endorse or promote 
+products derived from this software without specific prior 
+written permission.
+
+THIS \nwlinkedidentc{SOFTWARE}{NW1GrkFo-ZXuKx-1} IS PROVIDED BY THE REGENTS \nwlinkedidentc{AND}{NW1GrkFo-ZXuKx-1} CONTRIBUTORS \nwindexdefn{\nwixident{SOFTWARE}}{SOFTWARE}{NW1GrkFo-ZXuKx-1}
+"AS IS" \nwlinkedidentc{AND}{NW1GrkFo-ZXuKx-1} ANY EXPRESS \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} IMPLIED WARRANTIES, INCLUDING, 
+BUT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} LIMITED TO, THE IMPLIED WARRANTIES OF \nwindexdefn{\nwixident{NOT}}{NOT}{NW1GrkFo-ZXuKx-1}
+MERCHANTABILITY \nwlinkedidentc{AND}{NW1GrkFo-ZXuKx-1} FITNESS FOR A PARTICULAR PURPOSE ARE \nwindexdefn{\nwixident{AND}}{AND}{NW1GrkFo-ZXuKx-1}
+DISCLAIMED. \nwlinkedidentc{IN}{NW1GrkFo-ZXuKx-1} NO EVENT SHALL THE REGENTS \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} CONTRIBUTORS 
+BE \nwlinkedidentc{LIABLE}{NW1GrkFo-ZXuKx-1} FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, \nwindexdefn{\nwixident{LIABLE}}{LIABLE}{NW1GrkFo-ZXuKx-1}
+EXEMPLARY, \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} CONSEQUENTIAL DAMAGES (INCLUDING, 
+BUT \nwlinkedidentc{NOT}{NW1GrkFo-ZXuKx-1} LIMITED TO, PROCUREMENT OF SUBSTITUTE \nwindexdefn{\nwixident{NOT}}{NOT}{NW1GrkFo-ZXuKx-1}
+GOODS \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} SERVICES; LOSS OF USE, DATA, \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} PROFITS; \nwindexdefn{\nwixident{OR}}{OR}{NW1GrkFo-ZXuKx-1}
+\nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} \nwlinkedidentc{BUSINESS}{NW1GrkFo-ZXuKx-1} INTERRUPTION) HOWEVER CAUSED \nwlinkedidentc{AND}{NW1GrkFo-ZXuKx-1} ON \nwindexdefn{\nwixident{BUSINESS}}{BUSINESS}{NW1GrkFo-ZXuKx-1}
+ANY \nwlinkedidentc{THEORY}{NW1GrkFo-ZXuKx-1} OF LIABILITY, WHETHER \nwlinkedidentc{IN}{NW1GrkFo-ZXuKx-1} CONTRACT, STRICT \nwindexdefn{\nwixident{THEORY}}{THEORY}{NW1GrkFo-ZXuKx-1}
+LIABILITY, \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} TORT (INCLUDING NEGLIGENCE \nwlinkedidentc{OR}{NW1GrkFo-ZXuKx-1} OTHERWISE) 
+ARISING \nwlinkedidentc{IN}{NW1GrkFo-ZXuKx-1} ANY WAY OUT OF THE USE OF THIS \nwlinkedidentc{SOFTWARE}{NW1GrkFo-ZXuKx-1}, \nwindexdefn{\nwixident{IN}}{IN}{NW1GrkFo-ZXuKx-1}
+EVEN \nwlinkedidentc{IF}{NW1GrkFo-ZXuKx-1} ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. \nwindexdefn{\nwixident{IF}}{IF}{NW1GrkFo-ZXuKx-1}
+*/
+\nwused{\\{NW1GrkFo-1XrNH2-1}}\nwidentdefs{\\{{\nwixident{AND}}{AND}}\\{{\nwixident{and}}{and}}\\{{\nwixident{BUSINESS}}{BUSINESS}}\\{{\nwixident{c}}{c}}\\{{\nwixident{IF}}{IF}}\\{{\nwixident{IN}}{IN}}\\{{\nwixident{LIABLE}}{LIABLE}}\\{{\nwixident{NOT}}{NOT}}\\{{\nwixident{OR}}{OR}}\\{{\nwixident{Regents}}{Regents}}\\{{\nwixident{rights}}{rights}}\\{{\nwixident{SOFTWARE}}{SOFTWARE}}\\{{\nwixident{THEORY}}{THEORY}}}\nwendcode{}
+
+\nwixlogsorted{c}{{license}{NW1GrkFo-ZXuKx-1}{\nwixu{NW1GrkFo-1XrNH2-1}\nwixd{NW1GrkFo-ZXuKx-1}}}%
+\nwixlogsorted{c}{{pkg-updated.conf}{NW1GrkFo-1cwekS-1}{\nwixd{NW1GrkFo-1cwekS-1}\nwixd{NW1GrkFo-1cwekS-2}\nwixd{NW1GrkFo-1cwekS-3}\nwixd{NW1GrkFo-1cwekS-4}\nwixd{NW1GrkFo-1cwekS-5}\nwixd{NW1GrkFo-1cwekS-6}\nwixd{NW1GrkFo-1cwekS-7}\nwixd{NW1GrkFo-1cwekS-8}\nwixd{NW1GrkFo-1cwekS-9}\nwixd{NW1GrkFo-1cwekS-A}\nwixd{NW1GrkFo-1cwekS-B}}}%
+\nwixlogsorted{c}{{pkg-updated.go}{NW1GrkFo-1XrNH2-1}{\nwixd{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: check-updates}{NW1GrkFo-3Sld4X-1}{\nwixd{NW1GrkFo-3Sld4X-1}\nwixd{NW1GrkFo-3Sld4X-2}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: chop}{NW1GrkFo-39UGcF-1}{\nwixd{NW1GrkFo-39UGcF-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: lock}{NW1GrkFo-zKPPD-1}{\nwixd{NW1GrkFo-zKPPD-1}\nwixd{NW1GrkFo-zKPPD-2}\nwixd{NW1GrkFo-zKPPD-3}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: lockexclude}{NW1GrkFo-3YfAR2-1}{\nwixu{NW1GrkFo-4eZMb4-6}\nwixd{NW1GrkFo-3YfAR2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: logging}{NW1GrkFo-49a3GF-1}{\nwixd{NW1GrkFo-49a3GF-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: main}{NW1GrkFo-4eZMb4-1}{\nwixd{NW1GrkFo-4eZMb4-1}\nwixd{NW1GrkFo-4eZMb4-2}\nwixd{NW1GrkFo-4eZMb4-3}\nwixd{NW1GrkFo-4eZMb4-4}\nwixd{NW1GrkFo-4eZMb4-5}\nwixd{NW1GrkFo-4eZMb4-6}\nwixd{NW1GrkFo-4eZMb4-7}\nwixd{NW1GrkFo-4eZMb4-8}\nwixd{NW1GrkFo-4eZMb4-9}\nwixd{NW1GrkFo-4eZMb4-A}\nwixd{NW1GrkFo-4eZMb4-B}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: modules}{NW1GrkFo-23yzt2-1}{\nwixd{NW1GrkFo-23yzt2-1}\nwixd{NW1GrkFo-23yzt2-2}\nwixd{NW1GrkFo-23yzt2-3}\nwixd{NW1GrkFo-23yzt2-4}\nwixd{NW1GrkFo-23yzt2-5}\nwixd{NW1GrkFo-23yzt2-6}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: readconfig}{NW1GrkFo-3u3wI7-1}{\nwixd{NW1GrkFo-3u3wI7-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: rollback}{NW1GrkFo-442Uld-1}{\nwixd{NW1GrkFo-442Uld-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: runcmd}{NW1GrkFo-2oiMyj-1}{\nwixd{NW1GrkFo-2oiMyj-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: scheduler}{NW1GrkFo-37IcF6-1}{\nwixd{NW1GrkFo-37IcF6-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: services}{NW1GrkFo-DN2n-1}{\nwixd{NW1GrkFo-DN2n-1}\nwixd{NW1GrkFo-DN2n-2}\nwixd{NW1GrkFo-DN2n-3}\nwixd{NW1GrkFo-DN2n-4}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: sqlite-connect}{NW1GrkFo-3oW9ND-1}{\nwixd{NW1GrkFo-3oW9ND-1}\nwixd{NW1GrkFo-3oW9ND-2}\nwixd{NW1GrkFo-3oW9ND-3}\nwixd{NW1GrkFo-3oW9ND-4}\nwixd{NW1GrkFo-3oW9ND-5}\nwixd{NW1GrkFo-3oW9ND-6}\nwixd{NW1GrkFo-3oW9ND-7}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: sqlite-schema}{NW1GrkFo-Xky2k-1}{\nwixu{NW1GrkFo-3oW9ND-1}\nwixd{NW1GrkFo-Xky2k-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: syncdb}{NW1GrkFo-1ZnzCf-1}{\nwixd{NW1GrkFo-1ZnzCf-1}\nwixd{NW1GrkFo-1ZnzCf-2}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: unlockexclude}{NW1GrkFo-3tlxMz-1}{\nwixu{NW1GrkFo-4eZMb4-9}\nwixd{NW1GrkFo-3tlxMz-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: update}{NW1GrkFo-2BPGtT-1}{\nwixd{NW1GrkFo-2BPGtT-1}\nwixd{NW1GrkFo-2BPGtT-2}\nwixd{NW1GrkFo-2BPGtT-3}\nwixd{NW1GrkFo-2BPGtT-4}\nwixd{NW1GrkFo-2BPGtT-5}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{pkg-updated.go: variables}{NW1GrkFo-2h7kw1-1}{\nwixd{NW1GrkFo-2h7kw1-1}\nwixd{NW1GrkFo-2h7kw1-2}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{c}{{TODO}{NW1GrkFo-2ea6on-1}{\nwixd{NW1GrkFo-2ea6on-1}\nwixd{NW1GrkFo-2ea6on-2}\nwixd{NW1GrkFo-2ea6on-3}\nwixd{NW1GrkFo-2ea6on-4}\nwixd{NW1GrkFo-2ea6on-5}\nwixd{NW1GrkFo-2ea6on-6}\nwixd{NW1GrkFo-2ea6on-7}\nwixd{NW1GrkFo-2ea6on-8}}}%
+\nwixlogsorted{c}{{version}{NW1GrkFo-3iHmBG-1}{\nwixd{NW1GrkFo-3iHmBG-1}\nwixu{NW1GrkFo-1XrNH2-1}}}%
+\nwixlogsorted{i}{{\nwixident{AND}}{AND}}%
+\nwixlogsorted{i}{{\nwixident{and}}{and}}%
+\nwixlogsorted{i}{{\nwixident{BUSINESS}}{BUSINESS}}%
+\nwixlogsorted{i}{{\nwixident{c}}{c}}%
+\nwixlogsorted{i}{{\nwixident{config{\_}file}}{config:unfile}}%
+\nwixlogsorted{i}{{\nwixident{IF}}{IF}}%
+\nwixlogsorted{i}{{\nwixident{IN}}{IN}}%
+\nwixlogsorted{i}{{\nwixident{LIABLE}}{LIABLE}}%
+\nwixlogsorted{i}{{\nwixident{NOT}}{NOT}}%
+\nwixlogsorted{i}{{\nwixident{OR}}{OR}}%
+\nwixlogsorted{i}{{\nwixident{Regents}}{Regents}}%
+\nwixlogsorted{i}{{\nwixident{rights}}{rights}}%
+\nwixlogsorted{i}{{\nwixident{SOFTWARE}}{SOFTWARE}}%
+\nwixlogsorted{i}{{\nwixident{THEORY}}{THEORY}}%
+\nwbegindocs{146}\nwdocspar
+\nwenddocs{}
