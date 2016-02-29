@@ -14,26 +14,29 @@ var (
 
 <<TODO>>=
 Ideas: 
-	- Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
-	- Output from updated pkg messages must be interprete to add in report as well 
-	- Version 1.0: Proper Daemon mode
-	- Version 2.0: Jail Support, ...
+	- For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
+	- For Reporting: Output from updated pkg messages must be interpret to add in report as well 
+	- [x] Version 0.2: Alpha version
+	- Version 0.3: Scheduler and parametrized run mode
+	- Version 0.3: Readme / Howto use
+	- Version 0.4: Reporting + client command for generate report's
+	- Version 0.5: Refactor all variable names and functions
+	- Version 0.5: Finish book and publish first public beta
+	- Version 0.6: Fix bugs and Performance issues
+	- Version 0.7: FreeBSD Port and SelfUpdate routine
+	- Version 0.8: Bugfix / Cleanup documentation
+	- Version 0.9: Bugfix / Cleanup documentation
+	- Version 1.0: Stable Release
+	- Version 1.0: Jail support
 	- Version 2.0: Update Server which collects all reports and coordinate updates
-	- Version 2.0: Desktop: Panel tool for display succesfull updates
+	- Version 2.0: Desktop: Panel tool for display successful updates
 	
 Bugs:
 	- If db exists but is empty, the synctodb must run at first (disabled currently)
-	- Sudo run does not work correct
 	- SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
-
 	- wrong usage of Slices, read again:
 	http://blog.golang.org/go-slices-usage-and-internals
 
-
-Conceptional:
-	- The SyncPackageDB will overwrite or just update package infomations.
-		-> Are this save for all use-cases ?
-			Which use-cases exists ?
 @
 
 
@@ -41,14 +44,14 @@ Conceptional:
 \section{The Idea}
 
 Simple package update daemon for automated pkg update.
-The pkg-updated takle the update by using the pkg command.
+The pkg-updated tackle the update by using the pkg command.
 
 \newpage
 \subsection{Configuration}
 The [[pkg-updated.conf]] parameters in detail.
 
 The [[exclude]] define the packages, which will not updated automatically.
-Reports of the pkg upgrade progress will be created if parameter is set true (boolean). 
+Reports of the pkg upgrade progress will be created if parameter is set true (Boolean). 
 
 <<pkg-updated.conf>>=
 {
@@ -99,9 +102,9 @@ Database files
 	"database-file": "./pkg-updated.sqlite",
 @
 
-Should the pkg-updated DB syncronized on every boot
+Should the pkg-updated DB synchronized on every boot
 If set to true, the DB will delete on every start of the program.
-All rollback package informations are lost, so no automate rollback possible !
+All rollback package information's are lost, so no automate rollback possible !
 
 <<pkg-updated.conf>>=
 	"fresh-db-sync-on-start": false
@@ -176,14 +179,14 @@ In general, if the Major version of a Software change, then we talk about an Upg
 So an update means if from Version x to Version y the minor number have been changed.
 
 \newpage
-\section{The Workflow for automated package update}
+\section{The Work flow for automated package update}
 
 The general progress for the pkg-updated have to be:
 
 1.) Get current installed packages from existing Database.
 If the existing Database does not exists, test if /usr/local/ and subdirectories or files exists.
 If a /usr/local directory tree exist's without any pkg information databases the program have to stop for secure.
-When the database exists the program have to analyse all installed packages by files and directories.
+When the database exists the program have to analyze all installed packages by files and directories.
 
 2.) Create a backup of all installed packages and store it under /var/backup or similar directory
 In case of upgrade failure, we are able to rollback the system to a stable state back
@@ -194,33 +197,33 @@ Therefor we have to check the the version differences for newer versions
 
 Possibilities:
 	- Use pkg version command
-	- Use sqlite and analyse all local repos with the version from local.sqlite
+	- Use sqlite and analyze all local repos with the version from local.sqlite
 
-Take all updateable packages in a separate array/hash/db
+Take all update-able packages in a separate array/hash/db
 
 x) Before the daemon upgrade a package some steps have to be done before:
 
 - Read enabled services from rc.conf and check service scripts for the target command.
 - If the target daemon command available, verify the path/bin with the pkg db information and detect the pkg name.
-- Get all running deamons and used config files
+- Get all running daemons and used config files
 	-> Check config files from packages (/usr/local/etc/*, /etc/*)
 - Check if the config files will overwrite on update
-	-> Check for bare configfile names or configfile.sample 
+	-> Check for bare config file names or configfile.sample 
 	
 z) Now update all non-critical packages if possible and not locked
 
 Before update, check for scheduled packages.
 
-z) Restart a service after update (example apache)
+z) Restart a service after update (example Apache)
 
 If the service restart command failing or the daemon does not come up after a while, the update process are failed at all.
-The daemon must reinstall the old package and mark the update as broken. 
+The daemon must re-install the old package and mark the update as broken. 
 
 \newpage
 \section{Get current installed packages from existing Database}
 
-The pkg program use sqlite as database for store all package related informations.
-This database will be used to fetch all related informations as source for the update daemon.
+The pkg program use sqlite as database for store all package related information's.
+This database will be used to fetch all related information's as source for the update daemon.
 
 
 Follow go modules are used:
@@ -277,7 +280,7 @@ func CreateDatabase(db *sql.DB) int {
 @
 
 In addition some other functions are needed, like add package with name and status, delete a package from database.
-The function [[GetPackageInfo]] is used to report the current informations of a package.
+The function [[GetPackageInfo]] is used to report the current information's of a package.
 
 <<TODO>>=
 // TODO: function + Return code 	-> string, retcode/error
@@ -501,7 +504,7 @@ Which fields are required for the pkg-update daemon it self.
 Packages Schema:
 
 - Installed package names and versions
-- Current status of a packages, (uptodate, update-available)
+- Current status of a packages, (up-to-date, update-available)
 - Index over the name field
 - Origin
 - Rollback-PkgFile
@@ -555,14 +558,14 @@ At first, we read the configuration file and initialize the Database connections
 
 @
 
-In every iteration round from daemon, we must syncronize the local package informations to the pkg-updated database.
+In every iteration round from daemon, we must synchronize the local package information's to the pkg-updated database.
 This is necessary, because pkg-updated will never touch the pkg databases it self, it will use his own.
-The syncronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
+The synchronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
 
 %%The pkg-updated reads the local package database and check every package with the own database.
 %%If the package already exists in the pkg-updated database, the program will compare the version numbers.
 %%As long as the version numbers are the same, the program just will compare the status at least and update the status to "up-to-date" if this %%is not already the case.
-%%Should be the version number different, the pkg-updated will syncronize the version number an set the status to "up-to-date" as well.
+%%Should be the version number different, the pkg-updated will synchronize the version number an set the status to "up-to-date" as well.
 			
 <<pkg-updated.go: main>>=
 	SyncPkgDatabases(db);
@@ -623,14 +626,14 @@ func SyncPkgDatabases(db *sql.DB) error {
 	
 @
 <<TODO>>=
-// 20160124: SyncPackageDB() -> Use messagequeue and go routine for faster copy process
+// 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
 @
 
 Sync all packages from system to pkg-updated db.
 Also update the lock.
 
-And, only update the informations if changes are detected otherwise leaf it as it is.
-If [[fresh db sync on start]] is enabled, the informations will add, because the DB is clear from begin the function
+And, only update the information's if changes are detected otherwise leaf it as it is.
+If [[fresh db sync on start]] is enabled, the information's will add, because the DB is clear from begin the function
 
 <<pkg-updated.go: syncdb>>=
 	for rows.Next() {
@@ -662,7 +665,7 @@ If [[fresh db sync on start]] is enabled, the informations will add, because the
 }
 @
 
-After syncronization, we are ready for check available updates.
+After synchronization, we are ready for check available updates.
 This job can do by pkg program it self, we just need the output.
 The commands to run are: [[pkg version]]
 
@@ -689,7 +692,7 @@ func CheckUpdates(db *sql.DB){
 
 @
 <<TODO>>=
-// 20160215: Use bytes.Buffer for cmdOut parsings at all instead concat or string append
+// 20160215: Use bytes.Buffer for cmdOut parsing at all instead of concatinate or string append
 @
 
 <<pkg-updated.go: check-updates>>=
@@ -852,7 +855,7 @@ Test Upgrade and sync DB
 <<pkg-updated.go: main>>=
 	Upgrade();
 @
-After upgrade, sync the database again, question is:
+After upgrade let sync the database again, questions are:
 
 Do we need to sync from fresh ? (check needed)
 Otherwise the DB will corrupt after a while.
@@ -915,10 +918,10 @@ func RollbackPackage(db *sql.DB, name string){
 
 \subsubsection{Exclude packages from update process}
 
-Excluded packages must be protect for depencies from other packages during the update process.
+Excluded packages must be protect for dependencies from other packages during the update process.
 The best option to do that is, the we lock the package in the pkg database directly.
 
-[[pkg lock]] ist the Command for doing this
+[[pkg lock]] is the Command for doing this
 
 But we must unlock the package after the update/upgrade is done.
 
@@ -1074,7 +1077,7 @@ If configured, the daemon are allowed to start the update if the time reached.
 How to handle the timing exact ?
 
 
-Howto handle Daylight Saving Time ?
+How-to handle Daylight Saving Time ?
 	Open Questions: 
 	- What happen during time change ?
 	- What happen during Winter/Summer Time switch ?
@@ -1087,7 +1090,7 @@ Two typically issue:
 - Change time from 02:59:59 to 02:00:00 in winter
 	-> Jobs running twice if configured for 02:xx AM
 - Change time from 02:00:00 to 03:00:00 in summer
-	-> Jobs nevers runs if configure for 02:00 AM
+	-> Jobs never runs if configure for 02:00 AM
 	
 Options with FreeBSD and Cron ?
 	- read manpage
@@ -1099,33 +1102,8 @@ How the scheduler should work:
 - check every x seconds the current time and store it
 - compare the current time with the last time stamp
 	If compare time is bigger -> jump forward happened
-	If compare time is smaller or minus -> jump backward happend
+	If compare time is smaller or minus -> jump backward happened
 	
-
-
-Possible schedule options:
-
-- Every x Minutes / Hours
-- One time in the Day (every 24h)
-
-- Format:
-
-- Go time formats, ....
-
-Simple approach:
-
-import "time"
-
-func main() {
-	go heartBeat()
-	time.Sleep(time.Second * 5)
-}
-func heartBeat(){
-    for range time.Tick(time.Second *1){
-        fmt.Println("Foo")
-    }
-}
-
 What should run during each check ?
 - Is the current hour/minute match against job start ?
 	- If not, sleep
@@ -1144,9 +1122,120 @@ What should run during each check ?
 	- UnLockPackages()
 	- DONE
 
+We must use RunCmd for sleep, because the time in golang is not time backward aware !!!
+So it is just possible to detect time forward jumps, but not backwards.
+But we need to detect jumps in both directions to handle daylight saving time correctly.
+
+###
+### Model
+###
+
+Working:
+ - Last int64 - unixtime
+ - Now int64 - unixtime
+ - NextRun int64	= LastNextRun + 86400
+ - AlreadyDone bool
+
+CheckRecurring(t time.Time) bool;
+	if (AlreadyDone != false)
+		If t.Hour() >= recur.Hour()
+			If t.Minute() >= recur.Minute()
+				return true				
+	return false;
+After each run -> Set AlreadyDone = true;
+
+
+###
+### Time Parsing
+###
+
+	/*	Step 1: 
+			Scan configured input for am/AM/pm/PM, if true, parse it
+	*/	
+	if regex == "US" {
+		recur, err := time.Parse(time.Kitchen, "11:15PM");
+
+	} else {
+		var buffer bytes.Buffer
+		buffer.WriteString("24 Dec 00")
+		buffer.WriteString(config.STRING)
+		buffer.WriteString(" UTC")	
+		value := buffer.String();
+		recur, err := time.Parse(time.RFC822, value);
+		fmt.Printf("ERR: %v\n", err);
+	}
+	if err != nil {
+		fmt.Printf("Time Error: %v\n", err);
+	}	
+
+	fmt.Printf("Recurring time: %s:%s\n", recur.Hour(), recur.Minute);
+
+
+###
+### Run
+###
+
+	/* Step 1:
+			Verify that no time-jump occurred from last check to now!
+	*/
+	last = now;
+	RunCmd("sleep", "30");
+	now = time.Now();
+	
+	DiffMinute = last.Minute() - now.Minute();
+	DiffHour = last.Hour() - now.Hour();
+	
+	/* 	Last - Now
+	
+		Minute examples
+		# last = 59
+		# now = 00
+		# diff = 59
+			
+		# last = 00
+		# now = 02
+		# diff = -2
+	
+		Hour examples
+		# last 23
+		# now 00	
+		# diff 23
+
+		# last 02
+		# now 03
+		# diff -1
+
+		# last 03
+		# now 02
+		# diff 1
+	*/
+	
+
 
 <<pkg-updated.go: scheduler>>=
+func Scheduler(){
+	var TimeNow int64;
+	var BeforeNow int64;
+	var Diff int64;
+	cmdName := "sleep";
+	cmdArgs := []string{"1"}
+	TimeNow = time.Now().Unix();
 
+	for {
+		BeforeNow = TimeNow;
+		TimeNow = time.Now().Unix();
+		Diff = TimeNow - BeforeNow;
+		if (Diff < 0) {
+			fmt.Printf("Diff smaller then zero: %d\n", Diff);
+		} else if (Diff > 2) {
+			fmt.Printf("Diff greater then two: %d\n", Diff);
+		} else {
+			fmt.Printf("Diff else: %d\n", Diff);
+		}
+		fmt.Printf("Now: %v | Before: %v | Diff: %v\n", TimeNow,BeforeNow,time.Since(StartTime));
+		RunCmd("sleep", "3");
+	}
+}
 @
 
 
@@ -1361,6 +1450,9 @@ func RunCmd(cmd string, opts... string) (string, error) {
 			cmdArg1 = []string{"version", "-Rov"}
 		case "which":
 			cmdArg1 = []string{"which", "-qo"}
+		case "sleep":
+			cmdName = "sleep";
+			cmdArg1 = []string{opts[0]};
 		case "service":
 			cmdName = "service";
 			cmdArg1 = []string{"-e"};
@@ -1403,15 +1495,24 @@ func chop(s string) string {
 \newpage
 \section{Installation of pkg-updated}
 
-....
-
+\newpage
 \subsection{Install from source}
 
-
+\newpage
 \subsection{Install from pkg-repo}
 
+\newpage
 \subsection{Install from Ports}
 
+
+\newpage
+\section{How to run pkg-updated}
+
+Describe the usage and build a manpage out of it
+
+<<manpage>>=
+
+@
 
 \newpage
 \section{The basic pkg-updated program structure}
@@ -1461,11 +1562,11 @@ Redistribution and use in source and binary forms, with
 or without modification, are permitted provided that the 
 following conditions are met:
 
-1. Redistributions of source code must retain the above 
+1. Redistribution's of source code must retain the above 
 copyright notice, this list of conditions and 
 the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above 
+2. Redistribution's in binary form must reproduce the above 
 copyright notice, this list of conditions and the following 
 disclaimer in the documentation and/or other materials 
 provided with the distribution.
@@ -1484,7 +1585,7 @@ written permission.
 THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS 
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, 
 BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+MERCHANT-ABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
 DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS 
 BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
 EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 

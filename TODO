@@ -1,0 +1,33 @@
+Ideas: 
+        - For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
+        - For Reporting: Output from updated pkg messages must be interpret to add in report as well 
+        - Version 0.2: Alpha version
+        - Version 0.3: Scheduler and parametrized run mode
+        - Version 0.4: Reporting + client command for generate report's
+        - Version 0.5: Refactor all variable names and functions
+        - Version 0.5: Finish book and publish first public beta
+        - Version 0.6: Fix bugs and Performance issues
+        - Version 0.7: FreeBSD Port and SelfUpdate routine
+        - Version 0.8: Bugfix / Cleanup documentation
+        - Version 0.9: Bugfix / Cleanup documentation
+        - Version 1.0: Stable Release
+        - Version 1.0: Jail support
+        - Version 2.0: Update Server which collects all reports and coordinate updates
+        - Version 2.0: Desktop: Panel tool for display successful updates
+        
+Bugs:
+        - If db exists but is empty, the synctodb must run at first (disabled currently)
+        - SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
+        - wrong usage of Slices, read again:
+        http://blog.golang.org/go-slices-usage-and-internals
+
+// TODO: function + Return code         -> string, retcode/error
+// TODO: AddPackageDB: detect duplicate entries and avoid !!!
+// TODO: Use function handling with: func name(arg1 int, rest...);
+// 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
+// 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
+// 20160215: Use bytes.Buffer for cmdOut parsing at all instead of concatinate or string append
+// TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
+// TODO: Need to use nil error return correctly !
+// 20160201: Implement error handling
+// 20160209: Improve string/int usage in LockPackage
