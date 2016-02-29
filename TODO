@@ -1,8 +1,9 @@
 Ideas: 
         - For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
         - For Reporting: Output from updated pkg messages must be interpret to add in report as well 
-        - Version 0.2: Alpha version
+        - [x] Version 0.2: Alpha version
         - Version 0.3: Scheduler and parametrized run mode
+        - Version 0.3: Readme / Howto use
         - Version 0.4: Reporting + client command for generate report's
         - Version 0.5: Refactor all variable names and functions
         - Version 0.5: Finish book and publish first public beta
