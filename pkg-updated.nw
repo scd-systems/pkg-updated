@@ -8,7 +8,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=0
+	PATCH_VERSION=2
 )
 @
 
@@ -17,7 +17,8 @@ Ideas:
 	- For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
 	- For Reporting: Output from updated pkg messages must be interpret to add in report as well 
 	- [x] Version 0.2: Alpha version
-	- Version 0.3: Scheduler and parametrized run mode
+	- [x] Version 0.3: Scheduler
+	- Version 0.3: Parametrized program
 	- Version 0.3: Readme / Howto use
 	- Version 0.4: Reporting + client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
@@ -55,6 +56,14 @@ Reports of the pkg upgrade progress will be created if parameter is set true (Bo
 
 <<pkg-updated.conf>>=
 {
+@
+
+On which time the scheduler should run.
+Supported formats: HH:MM[a|A| ][m|M| ]
+So, 12 and 24 hour time format are supported
+
+<<pkg-updated.conf>>=
+	"schedule": "08:30PM",
 @
 
 Which packages should never be updated ?
@@ -129,6 +138,7 @@ Made with: https://mholt.github.io/json-to-go/
 
 <<pkg-updated.go: variables>>=
 var config struct {
+	RecurTime string `json:"schedule"`
 	ExcludePackages []string `json:"exclude-packages"`
     CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
@@ -558,18 +568,21 @@ At first, we read the configuration file and initialize the Database connections
 
 @
 
+After database initialize, we switch over to the Scheduler.	And sleep for ever in the main.
+
+<<pkg-updated.go: main>>=
+	go Scheduler(db);
+	RunCmd("sleep", "99999999");
+@
+<<TODO>>=
+// 20160305: Need to find a better way instead of sleep !
+@
+
+
 In every iteration round from daemon, we must synchronize the local package information's to the pkg-updated database.
 This is necessary, because pkg-updated will never touch the pkg databases it self, it will use his own.
 The synchronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
-
-%%The pkg-updated reads the local package database and check every package with the own database.
-%%If the package already exists in the pkg-updated database, the program will compare the version numbers.
-%%As long as the version numbers are the same, the program just will compare the status at least and update the status to "up-to-date" if this %%is not already the case.
-%%Should be the version number different, the pkg-updated will synchronize the version number an set the status to "up-to-date" as well.
 			
-<<pkg-updated.go: main>>=
-	SyncPkgDatabases(db);
-@
 
 <<pkg-updated.go: syncdb>>=
 func SyncPkgDatabases(db *sql.DB) error {
@@ -597,7 +610,6 @@ func SyncPkgDatabases(db *sql.DB) error {
 		}
 	}
 		
-
 	if (config.ClearSyncDatabaseEnabled == true){
 		fmt.Println("Fresh pkg databases syncronize");	
 		fmt.Printf("Clear pkg-updated database: ");	
@@ -721,11 +733,6 @@ func CheckUpdates(db *sql.DB){
 }
 @
 
-<<pkg-updated.go: main>>=
-	CheckUpdates(db)
-@
-
-
 \newpage
 \subsection{The update process}
 
@@ -820,18 +827,6 @@ func SavePackages(db *sql.DB){
 }
 @
 
-<<pkg-updated.go: main>>=
-	if (config.ArchiveEnable) {
-		SavePackages(db);
-	}
-@
-
-Start to lock exclude packages
-
-<<pkg-updated.go: main>>=
-	<<pkg-updated.go: lockexclude>>
-@
-
 
 2. Start Update and analyze output
 The upgrade process it self is quiet simple a runcmd step only
@@ -850,11 +845,10 @@ func Upgrade(){
 }
 @
 
-Test Upgrade and sync DB
-
-<<pkg-updated.go: main>>=
-	Upgrade();
-@
+%%Test Upgrade and sync DB
+%% pkg-updated.go: main
+%%	Upgrade();
+%%
 After upgrade let sync the database again, questions are:
 
 Do we need to sync from fresh ? (check needed)
@@ -862,21 +856,16 @@ Otherwise the DB will corrupt after a while.
 Problems with sync and clear DB:
 - The rollback paths will gone
 
-<<pkg-updated.go: main>>=
-	// Second RUN:
-	if (config.ClearSyncDatabaseEnabled == true) {
-		config.ClearSyncDatabaseEnabled = false;
-	}
-	SyncPkgDatabases(db);
-@
+%%pkg-updated.go: main
+%%	// Second RUN:
+%%	if (config.ClearSyncDatabaseEnabled == true) {
+%%		config.ClearSyncDatabaseEnabled = false;
+%%	}
+%%	SyncPkgDatabases(db);
+%%
 
-Start to unlock exclude packages
 
-<<pkg-updated.go: main>>=
-	<<pkg-updated.go: unlockexclude>>
-@
-
-3. Downgrade failed updates, needed for late usage
+Downgrade failed updates, needed for late usage
 
 <<pkg-updated.go: rollback>>=
 func RollbackPackage(db *sql.DB, name string){
@@ -1048,19 +1037,6 @@ func LockExclude(db *sql.DB, lock int) {
 @
 
 
-
-Start syncing services
-
-<<pkg-updated.go: main>>=
-	// First Run
-	if (config.ClearSyncDatabaseEnabled == false) {
-		config.ClearSyncDatabaseEnabled = true;
-	}
-	ScanEnabledServices(db);
-@
-
-Now close the main function
-
 <<pkg-updated.go: main>>=
 }
 @
@@ -1076,164 +1052,119 @@ FreeBSD have the daemon command.
 If configured, the daemon are allowed to start the update if the time reached.
 How to handle the timing exact ?
 
+The scheduler will first detect the configured time format from the parameter.
+Then it parse it agains a value time format from golang.
+That is necessary to have all time function's available for using.
+Because to detect time jump's like on daylight saving days, the Unix Timestamp diffential from the last minute 
+of check and the current timestamp will compare.
 
-How-to handle Daylight Saving Time ?
-	Open Questions: 
-	- What happen during time change ?
-	- What happen during Winter/Summer Time switch ?
-
-Example problem:
-	On the last Sunday in March, the clock from the server will change during the night from 02:00 to 03:00 o`clock.
-	If pkg-updated is configured to start the update @02:15 am, the scheduled job must start/handle somehow.
-	
-Two typically issue:
-- Change time from 02:59:59 to 02:00:00 in winter
-	-> Jobs running twice if configured for 02:xx AM
-- Change time from 02:00:00 to 03:00:00 in summer
-	-> Jobs never runs if configure for 02:00 AM
-	
-Options with FreeBSD and Cron ?
-	- read manpage
-
-
-
-How the scheduler should work:
-- Get the current time
-- check every x seconds the current time and store it
-- compare the current time with the last time stamp
-	If compare time is bigger -> jump forward happened
-	If compare time is smaller or minus -> jump backward happened
-	
-What should run during each check ?
-- Is the current hour/minute match against job start ?
-	- If not, sleep
-	else
-	Start Upgrade process
-
-- Upgrade process:
-	- SyncDB()
-	- SavePackages()
-	- LockPackages()
-	- ScanEnabledServices()
-	- Upgrade()
-	- RestartServices()
-		- If a service fail
-			- RollbackPackage(pkg)
-	- UnLockPackages()
-	- DONE
+This check will detect all time jumps (forward and backward).
+Example:
+So, if the the schedule time is configured for at 02:00 o'clock in the morning (AM), and the summer daylight saving is exact on this day, the job will then run at 03:00 AM exactly when the time jump was detected.
+On the end of October it is nearly the same, but in this case, the job will run twice at 02:30 AM.
 
 We must use RunCmd for sleep, because the time in golang is not time backward aware !!!
 So it is just possible to detect time forward jumps, but not backwards.
 But we need to detect jumps in both directions to handle daylight saving time correctly.
 
-###
-### Model
-###
+We need regexp module to detect the daytime format from the [[schedule]] config parameter value
 
-Working:
- - Last int64 - unixtime
- - Now int64 - unixtime
- - NextRun int64	= LastNextRun + 86400
- - AlreadyDone bool
-
-CheckRecurring(t time.Time) bool;
-	if (AlreadyDone != false)
-		If t.Hour() >= recur.Hour()
-			If t.Minute() >= recur.Minute()
-				return true				
-	return false;
-After each run -> Set AlreadyDone = true;
-
-
-###
-### Time Parsing
-###
-
-	/*	Step 1: 
-			Scan configured input for am/AM/pm/PM, if true, parse it
-	*/	
-	if regex == "US" {
-		recur, err := time.Parse(time.Kitchen, "11:15PM");
-
-	} else {
-		var buffer bytes.Buffer
-		buffer.WriteString("24 Dec 00")
-		buffer.WriteString(config.STRING)
-		buffer.WriteString(" UTC")	
-		value := buffer.String();
-		recur, err := time.Parse(time.RFC822, value);
-		fmt.Printf("ERR: %v\n", err);
-	}
-	if err != nil {
-		fmt.Printf("Time Error: %v\n", err);
-	}	
-
-	fmt.Printf("Recurring time: %s:%s\n", recur.Hour(), recur.Minute);
-
-
-###
-### Run
-###
-
-	/* Step 1:
-			Verify that no time-jump occurred from last check to now!
-	*/
-	last = now;
-	RunCmd("sleep", "30");
-	now = time.Now();
-	
-	DiffMinute = last.Minute() - now.Minute();
-	DiffHour = last.Hour() - now.Hour();
-	
-	/* 	Last - Now
-	
-		Minute examples
-		# last = 59
-		# now = 00
-		# diff = 59
-			
-		# last = 00
-		# now = 02
-		# diff = -2
-	
-		Hour examples
-		# last 23
-		# now 00	
-		# diff 23
-
-		# last 02
-		# now 03
-		# diff -1
-
-		# last 03
-		# now 02
-		# diff 1
-	*/
-	
-
+<<pkg-updated.go: modules>>=
+"regexp"
+"time"
+@
 
 <<pkg-updated.go: scheduler>>=
-func Scheduler(){
-	var TimeNow int64;
-	var BeforeNow int64;
-	var Diff int64;
-	cmdName := "sleep";
-	cmdArgs := []string{"1"}
-	TimeNow = time.Now().Unix();
+func Scheduler(db *sql.DB){
+	var (
+		err error;
+		recur time.Time;
+		AlreadyRun bool;
+		Ticker int;
+		TimeNow time.Time;
+		LastCheck time.Time;
+		romandaytime bool;
+	)
+
+	romandaytime = false;
+	re := regexp.MustCompile("[0-9][0-9][a|A|p|P][m|M]$")
+	ret := re.FindString(config.RecurTime);
+
+	if (len(ret) > 0) {
+		romandaytime = true;
+	}
+
+	if (romandaytime) {
+		recur, err = time.Parse(time.Kitchen, config.RecurTime);
+	} else {
+		var buffer bytes.Buffer
+		buffer.WriteString("24 Dec 00 ")
+		buffer.WriteString(config.RecurTime)
+		buffer.WriteString(" UTC")
+		value := buffer.String();
+		recur, err = time.Parse(time.RFC822, value);
+	}
+	if(err != nil) {
+		fmt.Println(err);
+	}
+
+//DEBUG
+	fmt.Printf("Recurring time: %v:%v\n", recur.Hour(), recur.Minute());
+
+	LastCheck = time.Now();
+	var diff int64;
 
 	for {
-		BeforeNow = TimeNow;
-		TimeNow = time.Now().Unix();
-		Diff = TimeNow - BeforeNow;
-		if (Diff < 0) {
-			fmt.Printf("Diff smaller then zero: %d\n", Diff);
-		} else if (Diff > 2) {
-			fmt.Printf("Diff greater then two: %d\n", Diff);
-		} else {
-			fmt.Printf("Diff else: %d\n", Diff);
+
+		TimeNow = time.Now();
+		diff = LastCheck.Unix() - TimeNow.Unix();
+        
+		LastCheck = TimeNow;
+		if ((diff <= -65) || (diff > 65)) {
+			fmt.Printf("Time jump detected \n");
+			fmt.Printf("Set AlreadyRun to false");
+			AlreadyRun = false;
 		}
-		fmt.Printf("Now: %v | Before: %v | Diff: %v\n", TimeNow,BeforeNow,time.Since(StartTime));
-		RunCmd("sleep", "3");
+
+		if ((AlreadyRun == false) && (TimeNow.Hour() >= recur.Hour()) && (TimeNow.Minute() >= recur.Minute())) {
+			fmt.Printf("Scheduled Time reached, start job\n");
+			SyncPkgDatabases(db);
+			CheckUpdates(db);
+			if config.ArchiveEnable {
+				SavePackages(db);
+			}
+			LockExclude(db, 1);
+			ScanEnabledServices(db)
+
+			Upgrade();
+
+			/* Second RUN
+				Need to verify how it behaves 
+			
+			if config.ClearSyncDatabaseEnabled == true {
+				config.ClearSyncDatabaseEnabled = false
+			}
+			SyncPkgDatabases(db)
+			*/
+			
+			AlreadyRun = true;
+		}
+
+		Ticker = 0;
+		Ticker = (TimeNow.Hour()*3600)+(TimeNow.Minute()*60)+(TimeNow.Second());
+
+		if ((Ticker >= 86300) && (AlreadyRun == true)){
+			fmt.Printf("Set AlreadyRun to false");
+			AlreadyRun = false;
+		}
+
+// DEBUG
+//      fmt.Printf("Diff: %v | Last: %v | Now: %v \n", diff, LastCheck.Unix(), time.Now().Unix());
+//      fmt.Printf("DayStart: %d | Already Run: %v | Ticker: %d\n\n", unixdayzero, AlreadyRun, Ticker);
+
+		fmt.Printf("Recur: %v:%v | Now: %v:%v \n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute());
+
+        RunCmd("sleep", "60");
 	}
 }
 @
@@ -1269,16 +1200,6 @@ check enabled
 
 <<pkg-updated.go: modules>>=
 "io/ioutil"
-@
-		
-		
-<<pkg-updated.go: services>>=
-/*func RestartService(db *sql.DB, name){
-	if (config.RestartDaemons == true) {
-		return;	
-	}
-	return;
-}*/
 @
 
 Search the related packages from the service scripts from in the directory /usr/local/etc/rc.d
@@ -1322,7 +1243,8 @@ fmt.Printf("SVC: Clear service table: \n");
 fmt.Printf("SVC: Pkgname for origin %s: %s\n", chop(pkgorigin), pkgname);
 fmt.Printf("SVC: Add %s: %s\n", pkgname, svc);
 
-					if ret,cmdout,err = ScanScript(svc, cmdout); ret != 0 {
+					ret,cmdout,err = ScanScript(svc, cmdout);
+					if (ret != 0) {
 						fmt.Printf("SVC: %s is enabled\n", svc);
 						enabled = 1;
 					} else {
@@ -1377,15 +1299,16 @@ func ScanScript(path string, preout string) (int, string, error) {
 Server restart function.
 
 <<pkg-updated.go: services>>=
-func ScanScript(svc string) (int, error) {
+func RestartService(svc string) (int, error) {
 	var (
-		err error;
+		ret int;
 	)
-	var cmdOut string;
-	cmdOut,err = RunCmd("restart", svc);
+	cmdOut,err := RunCmd("restart", svc);
 	if err != nil {
-		fmt.Printf("SVC: Could not restart: %s\n", svc);
+		fmt.Printf("SVC: Could not restart: %s | cmdOut: %v\n", svc, cmdOut);
+		ret = 1;
 	}
+	return ret, err;
 }
 @
 
@@ -1451,8 +1374,8 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		case "which":
 			cmdArg1 = []string{"which", "-qo"}
 		case "sleep":
-			cmdName = "sleep";
-			cmdArg1 = []string{opts[0]};
+			_, err = exec.Command("sleep", opts[0]).CombinedOutput(); 
+			return "wakeup", err; 
 		case "service":
 			cmdName = "service";
 			cmdArg1 = []string{"-e"};
@@ -1540,9 +1463,9 @@ import (
 <<pkg-updated.go: check-updates>>
 <<pkg-updated.go: lock>>
 <<pkg-updated.go: rollback>>
-<<pkg-updated.go: scheduler>>
 <<pkg-updated.go: services>>
 <<pkg-updated.go: update>>
+<<pkg-updated.go: scheduler>>
 
 <<pkg-updated.go: main>>
 @

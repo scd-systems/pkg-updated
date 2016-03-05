@@ -2,7 +2,8 @@ Ideas:
         - For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
         - For Reporting: Output from updated pkg messages must be interpret to add in report as well 
         - [x] Version 0.2: Alpha version
-        - Version 0.3: Scheduler and parametrized run mode
+        - [/] Version 0.3: Scheduler
+        - Version 0.3: Parametrized program
         - Version 0.3: Readme / Howto use
         - Version 0.4: Reporting + client command for generate report's
         - Version 0.5: Refactor all variable names and functions
@@ -26,6 +27,7 @@ Bugs:
 // TODO: AddPackageDB: detect duplicate entries and avoid !!!
 // TODO: Use function handling with: func name(arg1 int, rest...);
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
+// 20160305: Need to find a better way instead of sleep !
 // 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
 // 20160215: Use bytes.Buffer for cmdOut parsing at all instead of concatinate or string append
 // TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
