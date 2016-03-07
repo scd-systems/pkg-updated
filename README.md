@@ -1,21 +1,21 @@
-pkg-updated is a daemon/wrapper for automated binary package update.
+pkg-updated for FreeBSD
 =====================
 
+pkg-updated is a daemon/wrapper for automated binary package update.
 The aim of this project is to provide a simple and reliable pkg update daemon for FreeBSD.
 
-The deamon is written in go and programmed with the literate programming method.
+The daemon is written in go and programmed with the literate programming method.
 Code and documentation are sourced in one file and need to extract/weaved before use.
 
+PKG (aka. pkgng) is the default binary package management software for FreeBSD.
 
 Features:
 
-- Configurable Scheduler for timing the updates
+- Configurable scheduler for recurring times
 - Archive packages which need to upgrade (for rollback)
-- Restart Services if an enabled running service was updated
-- Rollback updated packages on failed Service restart (not finished)
+- Restart services if an enabled running service was updated
+- Rollback updated packages on failed service restart (not finished)
 
-
-PKG (aka. pkgng) is the default binary package management software for FreeBSD.
 
 How to Start
 ---------------------
@@ -34,7 +34,7 @@ cd src;
 make pdf
 ```
 
-4\. Open and read the src/doc/pkg-updated.pdf
+4\. Open and read the pkg-updated.pdf
 
 5\. Modify/Extend/Change the source.
 Use your favorite tex/latex editor.
@@ -43,7 +43,6 @@ If you are done, re-create the documentation, the code or both:
 
 ```bash
 cd src;
-make pdf;
 make
 ```
 
