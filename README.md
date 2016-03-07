@@ -46,6 +46,18 @@ cd src;
 make
 ```
 
+6\. Fetch extra sqlite go package
+```bash
+setenv GOPATH .
+go install github.com/mattn/go-sqlite3 
+```
+
+7\. Run
+```bash
+go run pkg-updated.go
+```
+
+
 Installation
 ---------------------
 Please read documentations/install.howto
