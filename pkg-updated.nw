@@ -8,7 +8,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=2
+	PATCH_VERSION=4
 )
 @
 
@@ -19,9 +19,11 @@ Ideas:
 	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
 	- Version 0.3: Parametrized program
-	- Version 0.3: Readme / Howto use
+	- [/] Version 0.3: Readme / Howto use
+	- Version 0.4: Check userid and sudo usage
 	- Version 0.4: Reporting + client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
+	- Version 0.5: Proper error handling
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
@@ -65,6 +67,31 @@ So, 12 and 24 hour time format are supported
 <<pkg-updated.conf>>=
 	"schedule": "08:30PM",
 @
+
+Be in scheduled time or let the upgrade run if current time is behand scheduled time.
+If set false, the pkg-updated will upgrade immediate if the current time is behind the scheduled time.
+If set true, the upgrade will start only in a time range from 5 minutes from the scheduled timer.
+
+Example:
+1.)
+schedule = 09:00PM
+schedule-in-time = false
+current system time: 12:00PM
+
+The pkg-update will run upgrade immediatly after start.
+
+2.)
+schedule = 09:00PM
+schedule-in-time = true
+current system time: 12:00PM
+
+The pkg-update will NOT run upgrade after the program start.
+Instead it will start at 09:00PM
+
+<<pkg-updated.conf>>=
+	"schedule-in-time": true,
+@
+
 
 Which packages should never be updated ?
 It is also possible to lock packages by "pkg lock <pkg-name>" command
@@ -139,6 +166,7 @@ Made with: https://mholt.github.io/json-to-go/
 <<pkg-updated.go: variables>>=
 var config struct {
 	RecurTime string `json:"schedule"`
+	StrictRecurTime bool `json:"schedule-in-time"`
 	ExcludePackages []string `json:"exclude-packages"`
     CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
@@ -476,27 +504,23 @@ func GetAllPackages(db *sql.DB) ([]string, error){
 @
 
 
-Add Service function !
-
+Add Service function.
 Need enable as parameter as soon as enabled service detection is ready and working:
 
 <<pkg-updated.go: sqlite-connect>>=
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {	
-// func AddService(db *sql.DB, name string, svccmd string) int {	
 	tx, err := db.Begin();
 	if err != nil {
 		log.Fatal(err);
 	}
 	stmt, err := tx.Prepare("insert into services (name, svccmd, enabled) values (?, ?, ?)");
-//	stmt, err := tx.Prepare("insert into services (name, svccmd) values (?, ?)");
 	if err != nil {
 		log.Fatal(err);
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(name, svccmd, enabled);
-//	_, err = stmt.Exec(name, svccmd);
-
+	
 	if err != nil {
 		log.Fatal(err);
 		return -1;
@@ -527,6 +551,8 @@ Services Schema:
 - svccmd
 - enabled
 
+For jailed version need additional in package and service schema:
+- host
 
 <<pkg-updated.go: sqlite-schema>>=
 	CreateSchemaStmt := "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
@@ -572,7 +598,10 @@ After database initialize, we switch over to the Scheduler.	And sleep for ever i
 
 <<pkg-updated.go: main>>=
 	go Scheduler(db);
-	RunCmd("sleep", "99999999");
+	for {
+		RunCmd("sleep", "300");	
+	}
+
 @
 <<TODO>>=
 // 20160305: Need to find a better way instead of sleep !
@@ -845,25 +874,12 @@ func Upgrade(){
 }
 @
 
-%%Test Upgrade and sync DB
-%% pkg-updated.go: main
-%%	Upgrade();
-%%
 After upgrade let sync the database again, questions are:
 
 Do we need to sync from fresh ? (check needed)
 Otherwise the DB will corrupt after a while.
 Problems with sync and clear DB:
 - The rollback paths will gone
-
-%%pkg-updated.go: main
-%%	// Second RUN:
-%%	if (config.ClearSyncDatabaseEnabled == true) {
-%%		config.ClearSyncDatabaseEnabled = false;
-%%	}
-%%	SyncPkgDatabases(db);
-%%
-
 
 Downgrade failed updates, needed for late usage
 
@@ -1084,7 +1100,16 @@ func Scheduler(db *sql.DB){
 		TimeNow time.Time;
 		LastCheck time.Time;
 		romandaytime bool;
+		sleeptimer int;
+		tolerance int;
+		Run bool;
+		diff int64;
+		diff2 int;
+		RecurUnixStamp int;
 	)
+
+	sleeptimer = 60;
+	tolerance = 10;
 
 	romandaytime = false;
 	re := regexp.MustCompile("[0-9][0-9][a|A|p|P][m|M]$")
@@ -1112,48 +1137,63 @@ func Scheduler(db *sql.DB){
 	fmt.Printf("Recurring time: %v:%v\n", recur.Hour(), recur.Minute());
 
 	LastCheck = time.Now();
-	var diff int64;
+	RecurUnixStamp = (recur.Hour()*3600)+(recur.Minute()*60);	
 
 	for {
-
 		TimeNow = time.Now();
 		diff = LastCheck.Unix() - TimeNow.Unix();
+		Ticker = (TimeNow.Hour()*3600)+(TimeNow.Minute()*60)+(TimeNow.Second());
         
 		LastCheck = TimeNow;
-		if ((diff <= -65) || (diff > 65)) {
+		if ((diff <= (0 - int64(sleeptimer)-int64(tolerance))) || (diff > (int64(sleeptimer)+int64(tolerance)))) {
 			fmt.Printf("Time jump detected \n");
 			fmt.Printf("Set AlreadyRun to false");
 			AlreadyRun = false;
+		}		
+
+		// Only run if time has been arrived
+
+		if ( (AlreadyRun == false) && ((TimeNow.Hour() > recur.Hour()) || ( (TimeNow.Hour() == recur.Hour()) && (TimeNow.Minute() >= recur.Minute()) ))) {
+
+			// If strict time is configured, check the 5 minute tolerance
+
+			if (config.StrictRecurTime == true){
+				Run = false;
+				diff2 = Ticker - RecurUnixStamp;
+				if((diff2>0) && (diff2<300)) {
+					Run = true;
+				}
+			} else {
+				Run = true;
+			}			
+
+			if (Run == true) {
+				fmt.Printf("Scheduled Time reached, start job\n");
+				SyncPkgDatabases(db);
+				CheckUpdates(db);
+				if config.ArchiveEnable {
+					SavePackages(db);
+				}
+				LockExclude(db, 1);
+				ScanEnabledServices(db)
+	
+				Upgrade();
+	
+				/* Second RUN
+					Need to verify how it behaves 
+				
+				if config.ClearSyncDatabaseEnabled == true {
+					config.ClearSyncDatabaseEnabled = false
+				}
+				SyncPkgDatabases(db)
+				*/
+				
+				AlreadyRun = true;
+				Run = false;
+			}
 		}
 
-		if ((AlreadyRun == false) && (TimeNow.Hour() >= recur.Hour()) && (TimeNow.Minute() >= recur.Minute())) {
-			fmt.Printf("Scheduled Time reached, start job\n");
-			SyncPkgDatabases(db);
-			CheckUpdates(db);
-			if config.ArchiveEnable {
-				SavePackages(db);
-			}
-			LockExclude(db, 1);
-			ScanEnabledServices(db)
-
-			Upgrade();
-
-			/* Second RUN
-				Need to verify how it behaves 
-			
-			if config.ClearSyncDatabaseEnabled == true {
-				config.ClearSyncDatabaseEnabled = false
-			}
-			SyncPkgDatabases(db)
-			*/
-			
-			AlreadyRun = true;
-		}
-
-		Ticker = 0;
-		Ticker = (TimeNow.Hour()*3600)+(TimeNow.Minute()*60)+(TimeNow.Second());
-
-		if ((Ticker >= 86300) && (AlreadyRun == true)){
+		if ((Ticker >= (86400-sleeptimer-tolerance)) && (AlreadyRun == true)){
 			fmt.Printf("Set AlreadyRun to false");
 			AlreadyRun = false;
 		}
@@ -1162,9 +1202,9 @@ func Scheduler(db *sql.DB){
 //      fmt.Printf("Diff: %v | Last: %v | Now: %v \n", diff, LastCheck.Unix(), time.Now().Unix());
 //      fmt.Printf("DayStart: %d | Already Run: %v | Ticker: %d\n\n", unixdayzero, AlreadyRun, Ticker);
 
-		fmt.Printf("Recur: %v:%v | Now: %v:%v \n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute());
+		fmt.Printf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v\n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun);
 
-        RunCmd("sleep", "60");
+        RunCmd("sleep", strconv.Itoa(sleeptimer));
 	}
 }
 @
@@ -1426,6 +1466,10 @@ func chop(s string) string {
 
 \newpage
 \subsection{Install from Ports}
+
+
+\newpage
+\subsection{Sudo config}
 
 
 \newpage
