@@ -8,22 +8,29 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=4
+	PATCH_VERSION=5
 )
 @
 
 <<TODO>>=
+Legend:
+[/]	=	Feature implemented but not tested enough / not stable
+[x]	=	Featute implemented and stable
+
 Ideas: 
 	- For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
 	- For Reporting: Output from updated pkg messages must be interpret to add in report as well 
 	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
-	- Version 0.3: Parametrized program
 	- [/] Version 0.3: Readme / Howto use
+	- Version 0.3: Parametrized program
+	- Version 0.3: finalize pkg rollback for failed updates
 	- Version 0.4: Check userid and sudo usage
 	- Version 0.4: Reporting + client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
+	- Version 0.5: Port
+	- Version 0.5: rc.d script
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
@@ -33,7 +40,7 @@ Ideas:
 	- Version 1.0: Jail support
 	- Version 2.0: Update Server which collects all reports and coordinate updates
 	- Version 2.0: Desktop: Panel tool for display successful updates
-	
+
 Bugs:
 	- If db exists but is empty, the synctodb must run at first (disabled currently)
 	- SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
@@ -132,10 +139,15 @@ PKG Archive directory for rollback operations
 	"pkg-archive-directory": "./archive",
 @
 
-Database files
+The pkg-updated Database file which contains the package informations.
+The pkg-database-file is the OS database which contains the installed pkg's.
+The database-file is for pkg-updated it self for store package informations.
+The report-database-file is for logging and reporting of pkg-updated.
+
 <<pkg-updated.conf>>=
 	"pkg-database-file": "/var/db/pkg/local.sqlite",
 	"database-file": "./pkg-updated.sqlite",
+	"report-database-file": "./report.sqlite",
 @
 
 Should the pkg-updated DB synchronized on every boot
@@ -178,6 +190,7 @@ var config struct {
     ArchiveFile string `json:"pkg-archive-directory"`
     PkgDatabaseFile string `json:"pkg-database-file"`
     DatabaseFile string `json:"database-file"`
+    ReportDatabaseFile string `json:"report-database-file"`
 };
 @
 
@@ -203,10 +216,14 @@ func ReadConfig() int {
 		fmt.Printf("Error: %s\n", err.Error())
 		return -1;
 	}
-	fmt.Println(config);
+//	fmt.Println(config);
 	return 0;
 }
 @
+<<TODO>>=
+// 20160309: Need to set default config parameters if no parameters set in configfile
+@
+
 
 \newpage
 \section{Update vs. Upgrade}
@@ -230,32 +247,28 @@ When the database exists the program have to analyze all installed packages by f
 In case of upgrade failure, we are able to rollback the system to a stable state back
 We can also check under /var/cache/pkg for installed versions.
 
-3.) If the backup successfully done, we can check for updates
-Therefor we have to check the the version differences for newer versions
+3.) If the backup successfully done, we can check for updates.
+This can be done by pkg version command.
 
-Possibilities:
-	- Use pkg version command
-	- Use sqlite and analyze all local repos with the version from local.sqlite
-
-Take all update-able packages in a separate array/hash/db
-
-x) Before the daemon upgrade a package some steps have to be done before:
+4.) Scan for enabled services and collect the related package.
+This i needed for automatic service restart after pkg upgrade is done and a service was affected took.
+Like apache package update needs to restart the httpd after upgrade.
+Before the upgrade starts, some steps have to be done before:
 
 - Read enabled services from rc.conf and check service scripts for the target command.
 - If the target daemon command available, verify the path/bin with the pkg db information and detect the pkg name.
 - Get all running daemons and used config files
-	-> Check config files from packages (/usr/local/etc/*, /etc/*)
-- Check if the config files will overwrite on update
-	-> Check for bare config file names or configfile.sample 
 	
-z) Now update all non-critical packages if possible and not locked
+5) Now update all non-critical packages if possible and not locked
 
-Before update, check for scheduled packages.
-
-z) Restart a service after update (example Apache)
+6) Restart a service after update (example Apache)
 
 If the service restart command failing or the daemon does not come up after a while, the update process are failed at all.
 The daemon must re-install the old package and mark the update as broken. 
+
+7) Rollback packages if the service restart was not succesful. In this case, we expect a wrong package and hope the rollback will 
+bring the system back in stable mode.
+
 
 \newpage
 \section{Get current installed packages from existing Database}
@@ -288,8 +301,8 @@ We need a function to verify if the pkg-updated database already exists or not.
 Also we need a function to initialize an empty database.
 
 <<pkg-updated.go: sqlite-connect>>=
-func CheckDatabase() int {
-	_, err := os.Stat(config.DatabaseFile)
+func FileExists(filename string) int {
+	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return -1;
 	}
@@ -304,13 +317,13 @@ func OpenDB(filename string) *sql.DB {
 	return db;
 }
 
-func CreateDatabase(db *sql.DB) int {
+func CreateDatabase(db *sql.DB, id int) int {
 	
 	<<pkg-updated.go: sqlite-schema>>
 
-	_, err := db.Exec(CreateSchemaStmt);
+	_, err := db.Exec(DBSchema[id]);
 	if err != nil {
-		log.Printf("%q: %s\n", err, CreateSchemaStmt)
+		log.Printf("%q: %s\n", err, DBSchema[id])
 		return -1
 	}	
 	return 0;
@@ -555,7 +568,19 @@ For jailed version need additional in package and service schema:
 - host
 
 <<pkg-updated.go: sqlite-schema>>=
-	CreateSchemaStmt := "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
+	var DBSchema []string;
+	DBSchema = make([]string, 2)
+	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
+@
+
+The Reporting Database needs follow schema
+- timestamp
+- eventtype
+- facility
+- message
+
+<<pkg-updated.go: sqlite-schema>>=
+	DBSchema[1] = "CREATE TABLE report (id INTEGER NOT NULL PRIMARY KEY, eventtype TEXT, facility TEXT, message TEXT NOT NULL); CREATE INDEX report_type ON report (eventtype COLLATE NOCASE);";
 @
 
 \newpage
@@ -568,6 +593,9 @@ func main(){
 @
 
 At first, we read the configuration file and initialize the Database connections.
+If databases not exists, we create them.
+The report database will just open once for creating.
+After creating the report db, the file handle will close for access the report db again.
 
 <<pkg-updated.go: main>>=
 	ret := ReadConfig();
@@ -576,14 +604,16 @@ At first, we read the configuration file and initialize the Database connections
 		fmt.Printf("Failed to read configuration, stop working \n");
 		os.Exit(2);
 	}
+
+// Need to find a better code for open file only if exists and not before test file.
+			
 	db := OpenDB(config.DatabaseFile);
 	defer db.Close();
-
-	ret = CheckDatabase();	
-	fmt.Printf("Check Database: %d \n", ret);
+	ret = FileExists(config.DatabaseFile);	
+	fmt.Printf("Check packages Database %s: %d \n", config.DatabaseFile, ret);
 	if ret != 0 {
-		fmt.Printf("Create Database: ");
-		ret = CreateDatabase(db);
+		fmt.Printf("Create packages Database : ");
+		ret = CreateDatabase(db, 0);
 		if ret != 0 {
 			fmt.Printf("failed\n");
 			os.Exit(2);
@@ -591,17 +621,33 @@ At first, we read the configuration file and initialize the Database connections
 			fmt.Printf("done\n");
 		}
 	}
+	
+	ret = FileExists(config.ReportDatabaseFile);	
+	fmt.Printf("Check report Database %s: %d \n", config.ReportDatabaseFile, ret);
+	if ret != 0 {
+		reportdb := OpenDB(config.ReportDatabaseFile);
+		fmt.Printf("Create report Database : ");
+		ret = CreateDatabase(reportdb, 1);
+		if ret != 0 {
+			fmt.Printf("failed\n");
+			reportdb.Close();
+			os.Exit(2);
+		} else {
+			fmt.Printf("done\n");
+		}
+		reportdb.Close();
+	}
 
 @
 
 After database initialize, we switch over to the Scheduler.	And sleep for ever in the main.
+Maybe need to implement some self-healing checks every five minutes or other tasks.
 
 <<pkg-updated.go: main>>=
 	go Scheduler(db);
 	for {
 		RunCmd("sleep", "300");	
 	}
-
 @
 <<TODO>>=
 // 20160305: Need to find a better way instead of sleep !
@@ -718,11 +764,13 @@ The commands to run are: [[pkg version]]
 We extract all available updates from pkg version command and update this information inside the DB.
 For the extraction, we parse the whole output from the exec command.
 
+
 <<pkg-updated.go: check-updates>>=
 func CheckUpdates(db *sql.DB){
 	var (
 		cmdOut string
 		err    error
+		pkgname bytes.Buffer
 	)
 
 	cmdOut, err = RunCmd("version");
@@ -731,32 +779,21 @@ func CheckUpdates(db *sql.DB){
 		fmt.Fprintln(os.Stderr, "There was an error running pkg command: ", err, cmdOut)
 	}
 
-@
-<<TODO>>=
-// 20160215: Use bytes.Buffer for cmdOut parsing at all instead of concatinate or string append
-@
-
-<<pkg-updated.go: check-updates>>=
-	sha := string(cmdOut);
-	var pkgs [][]byte;
-	pkgs = make([][]byte, 1);
-	x := 0;
-	for n:=0;n<len(sha);n++ {
-		if (sha[n] == 60) {
-			UpdatePackage(db, "status", "update-available", "origin", string(pkgs[x]));
-			npkgs := make([][]byte, len(pkgs)+1);
-			x++;
-			copy(npkgs, pkgs);
-			pkgs = npkgs;
-			pkgs[x] = make([]byte, 1);
+	// 60 == '<'
+	// 10 == SPACE
+	// 32 == C.R.
+	for n:=0;n<len(cmdOut);n++ {
+		if (cmdOut[n] == 60) {
+			UpdatePackage(db, "status", "update-available", "origin", pkgname.String());
+			pkgname.Reset();
 			continue;
 		}
-		if (sha[n] == 10) {
-			pkgs[x] = nil;
+		if (cmdOut[n] == 10) {
+			pkgname.Reset();
 			continue;
 		}
-		if (sha[n] != 32) {
-			pkgs[x] = append(pkgs[x], sha[n]);
+		if (cmdOut[n] != 32) {
+			pkgname.WriteString(string(cmdOut[n]));
 		}
 	}
 }
@@ -1381,6 +1418,14 @@ func logging(text string){
 @
 
 \newpage
+\subsection{Parameters}
+
+Define the parameters for [[pkg-updated]].
+
+-d | --debug	-> debug all messages
+
+
+\newpage
 \subsection{Helper functions}
 
 For running shell commands and reduce code, need a function to do all the necessary steps
@@ -1470,6 +1515,12 @@ func chop(s string) string {
 
 \newpage
 \subsection{Sudo config}
+
+Sudo rules need
+
+<<sudo>>=
+_pkg-updated	ALL=(ALL)	NOPASSWD: /usr/sbin/pkg install -y -f *, /usr/sbin/pkg update -y -f, /usr/sbin/pkg lock -y *, /usr/sbin/pkg unlock -y *, /usr/sbin/pkg upgrade -y, /usr/sbin/pkg create -o *, /usr/sbin/pkg version -Rov, /usr/sbin/pkg which -qo *, /usr/sbin/service *
+@
 
 
 \newpage
