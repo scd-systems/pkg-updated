@@ -8,7 +8,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=5
+	PATCH_VERSION=6
 )
 @
 
@@ -23,10 +23,11 @@ Ideas:
 	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
 	- [/] Version 0.3: Readme / Howto use
-	- Version 0.3: Parametrized program
+	- [/] Version 0.3: Parametrized program
 	- Version 0.3: finalize pkg rollback for failed updates
 	- Version 0.4: Check userid and sudo usage
-	- Version 0.4: Reporting + client command for generate report's
+	- [/] Version 0.4: Reporting / Logging
+	- Version 0.4: Reporting client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
 	- Version 0.5: Port
@@ -35,6 +36,7 @@ Ideas:
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
 	- Version 0.8: Bugfix / Cleanup documentation
+	- Version 0.9: automate schema upgrade if new schema available
 	- Version 0.9: Bugfix / Cleanup documentation
 	- Version 1.0: Stable Release
 	- Version 1.0: Jail support
@@ -191,6 +193,8 @@ var config struct {
     PkgDatabaseFile string `json:"pkg-database-file"`
     DatabaseFile string `json:"database-file"`
     ReportDatabaseFile string `json:"report-database-file"`
+    Param_DebugMode *bool;
+    FileExistsNoLog bool;
 };
 @
 
@@ -204,19 +208,18 @@ To use json, we need the json package
 func ReadConfig() int {
 	configfile, err := os.Open(config_file);
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error());
+		logging(LOG_ERROR, "readconfig-openfile", err.Error());
 		return -1;
 	}
 	defer configfile.Close();
 
 	jsonParser := json.NewDecoder(configfile)
-//	conf := new(config);
 	
 	if err = jsonParser.Decode(&config); err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		logging(LOG_ERROR, "readconfig-decode", err.Error());
 		return -1;
 	}
-//	fmt.Println(config);
+	logging(LOG_DEBUG, "readconfig-parsed", fmt.Sprint(config));
 	return 0;
 }
 @
@@ -304,14 +307,29 @@ Also we need a function to initialize an empty database.
 func FileExists(filename string) int {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
+		if (config.FileExistsNoLog == false) {
+			logging(LOG_ERROR, "fileexists-stat", fmt.Sprint(err))
+		} else {
+			config.FileExistsNoLog = false;
+		}
 		return -1;
 	}
 	return 0;
 }
 
+func FileExistsNoLog(filename string) int {
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return -1;
+	}
+	return 0;
+}
+
+
 func OpenDB(filename string) *sql.DB {
 	db, err := sql.Open("sqlite3", filename);
 	if err != nil {
+		logging(LOG_ERROR, "opendb", fmt.Sprint(err))
 		log.Fatal(err);
 	}
 	return db;
@@ -323,7 +341,7 @@ func CreateDatabase(db *sql.DB, id int) int {
 
 	_, err := db.Exec(DBSchema[id]);
 	if err != nil {
-		log.Printf("%q: %s\n", err, DBSchema[id])
+		logging(LOG_ERROR, "createdb", fmt.Sprintf("Schema: %s | error: %s", DBSchema[id], err))
 		return -1
 	}	
 	return 0;
@@ -348,11 +366,10 @@ func CountRows(db *sql.DB, table string, column string, search string) int {
 
 	err := db.QueryRow("SELECT count(*) FROM "+ table +" WHERE "+ column +" = '"+ search +"';").Scan(&result)
 	if err != nil {
+		logging(LOG_ERROR, "countrows", fmt.Sprint(err));
 		return -1;
 	}
-
-fmt.Printf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d\n", table, column, search, result);
-
+	logging(LOG_DEBUG, "countrows", fmt.Sprintf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d\n", table, column, search, result));
 	return result
 }
 @
@@ -454,7 +471,7 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 	
 	tx, err := db.Begin();
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
 	}
 
 	if len(opts) > 0 {
@@ -463,18 +480,17 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 		query = "UPDATE packages SET "+set_field+" = ? WHERE "+where_field+" = ?";
 	}
 
-/* DEBUG:	 */
-fmt.Printf("sql query: %s | Params: %s;%s\n", query, set_value, where_value);
+	logging(LOG_DEBUG, "updatepackage", fmt.Sprintf("sql query: %s | Params: %s;%s\n", query, set_value, where_value));
 	
 	stmt, err := tx.Prepare(query);
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(set_value, where_value);
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
 		return -1;
 	}
 	tx.Commit();
@@ -493,8 +509,7 @@ func GetAllPackages(db *sql.DB) ([]string, error){
 	
 	rows, err := db.Query("SELECT name FROM packages");
 	if err != nil {
-		log.Fatal(err);
-		fmt.Errorf("%s", err);
+		logging(LOG_ERROR, "getallpackages", fmt.Sprint(err));
 	}
 	defer rows.Close();
 	
@@ -509,6 +524,7 @@ func GetAllPackages(db *sql.DB) ([]string, error){
 		copy(tmp_result, result);
 		result = make([]string, len(result)+1);
 		i++;
+
 	}
 	result = make([]string, len(tmp_result)-1);
 	copy(result, tmp_result);
@@ -524,18 +540,18 @@ Need enable as parameter as soon as enabled service detection is ready and worki
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {	
 	tx, err := db.Begin();
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "addservice", fmt.Sprint(err));
 	}
 	stmt, err := tx.Prepare("insert into services (name, svccmd, enabled) values (?, ?, ?)");
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "addservice", fmt.Sprint(err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(name, svccmd, enabled);
 	
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "addservice", fmt.Sprint(err));	
 		return -1;
 	}
 	tx.Commit();
@@ -580,16 +596,20 @@ The Reporting Database needs follow schema
 - message
 
 <<pkg-updated.go: sqlite-schema>>=
-	DBSchema[1] = "CREATE TABLE report (id INTEGER NOT NULL PRIMARY KEY, eventtype TEXT, facility TEXT, message TEXT NOT NULL); CREATE INDEX report_type ON report (eventtype COLLATE NOCASE);";
+	DBSchema[1] = "CREATE TABLE report (id INTEGER NOT NULL PRIMARY KEY, timestamp INTEGER, eventtype TEXT, facility TEXT, message TEXT NOT NULL); CREATE INDEX report_type ON report (eventtype COLLATE NOCASE);";
 @
 
 \newpage
 \section{Detailed workflow}
 
-The main function.
+The main function. ....
 
 <<pkg-updated.go: main>>=
 func main(){
+
+<<pkg-updated.go: parameter>>
+
+logging(LOG_EVENT, "init", "Start pkg-updated"); 
 @
 
 At first, we read the configuration file and initialize the Database connections.
@@ -599,10 +619,11 @@ After creating the report db, the file handle will close for access the report d
 
 <<pkg-updated.go: main>>=
 	ret := ReadConfig();
-	fmt.Printf("Read Config: %d \n", ret);
+
+	logging(LOG_EVENT, "main", "Reading config"); 
+
 	if ret != 0 {
-		fmt.Printf("Failed to read configuration, stop working \n");
-		os.Exit(2);
+		logging(LOG_FATAL, "main", "Failed to read configuration, stop working"); 
 	}
 
 // Need to find a better code for open file only if exists and not before test file.
@@ -610,30 +631,30 @@ After creating the report db, the file handle will close for access the report d
 	db := OpenDB(config.DatabaseFile);
 	defer db.Close();
 	ret = FileExists(config.DatabaseFile);	
-	fmt.Printf("Check packages Database %s: %d \n", config.DatabaseFile, ret);
+	logging(LOG_INFO, "main", fmt.Sprintf("Check packages Database %s: %d \n", config.DatabaseFile, ret));	
+
 	if ret != 0 {
-		fmt.Printf("Create packages Database : ");
 		ret = CreateDatabase(db, 0);
 		if ret != 0 {
-			fmt.Printf("failed\n");
+			logging(LOG_ERROR, "main", "Create packages database: failed");	
 			os.Exit(2);
 		} else {
-			fmt.Printf("done\n");
+			logging(LOG_INFO, "main", "Create packages database: done");	
 		}
 	}
 	
 	ret = FileExists(config.ReportDatabaseFile);	
-	fmt.Printf("Check report Database %s: %d \n", config.ReportDatabaseFile, ret);
+	logging(LOG_INFO, "main", fmt.Sprintf("Check report Database %s: %d \n", config.ReportDatabaseFile, ret));	
+
 	if ret != 0 {
 		reportdb := OpenDB(config.ReportDatabaseFile);
-		fmt.Printf("Create report Database : ");
 		ret = CreateDatabase(reportdb, 1);
 		if ret != 0 {
-			fmt.Printf("failed\n");
+			logging(LOG_ERROR, "main", "Create report database: failed");
 			reportdb.Close();
 			os.Exit(2);
 		} else {
-			fmt.Printf("done\n");
+			logging(LOG_INFO, "main", "Create report database: done");	
 		}
 		reportdb.Close();
 	}
@@ -676,31 +697,29 @@ func SyncPkgDatabases(db *sql.DB) error {
 	if (len(pkglist) > 1) {
 		for _,name := range pkglist {
 			if lockstatus, err = GetPackageInfo(db, "lockstatus", name); err != nil {	
-				fmt.Println("Current Lockstatus: Error\n");
+				logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Current Lockstatus Error: %s", err));
 			}
 			if (lockstatus == "1") {
-				fmt.Printf("Unlock excluded packages before sync: %s\n", name)
+				logging(LOG_INFO, "syncpkgdatabase", fmt.Sprintf("Unlock excluded packages before sync: %s", name));
 				LockPackage(db, 0, name);
 			}
 		}
 	}
 		
 	if (config.ClearSyncDatabaseEnabled == true){
-		fmt.Println("Fresh pkg databases syncronize");	
-		fmt.Printf("Clear pkg-updated database: ");	
-
+		logging(LOG_INFO, "syncpkgdatabase", "Fresh pkg databases syncronize");
 		_, err = db.Exec("DELETE FROM packages");
 		if err != nil {
-			log.Printf("Error: %s\n", err);
+			logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Clear pkg-updated database: failed | Error: %s", err));
 			return err;
 		}	
-		fmt.Printf("done\n");	
+		logging(LOG_INFO, "syncpkgdatabase", "Clear pkg-updated database: done");
 	} 
 
-	fmt.Printf("Start sync pkg database: ");	
+		
 	rows, err := dbpkg.Query("SELECT name, version, origin, locked FROM packages");
 	if err != nil {
-		log.Fatal(err);
+		logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Sync pkg database: failed | Error: %s", err));
 	}
 	defer rows.Close();
 
@@ -747,7 +766,7 @@ If [[fresh db sync on start]] is enabled, the information's will add, because th
 			UpdatePackage(db, "lockstatus", "2", "name", name);
 		}
 	}
-	fmt.Printf("done\n");	
+	logging(LOG_INFO, "syncpkgdatabase", "Sync pkg database: done");
 	return nil;
 }
 @
@@ -776,7 +795,7 @@ func CheckUpdates(db *sql.DB){
 	cmdOut, err = RunCmd("version");
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "There was an error running pkg command: ", err, cmdOut)
+		logging(LOG_ERROR, "checkupdates", fmt.Sprintf("There was an error running pkg command: %s", err));
 	}
 
 	// 60 == '<'
@@ -815,22 +834,18 @@ func GetUpdateList(db *sql.DB) ([]string, error){
 
 	rows, err := db.Query("SELECT name FROM packages WHERE status = $1", "update-available")
 	if err != nil {
-		log.Fatal(err)
+		logging(LOG_ERROR, "getupdatelist", fmt.Sprint(err));
 		return list, fmt.Errorf("%s", err)
 	}
 	defer rows.Close()
 	
 	for rows.Next() {
-
-// DEBUG
-//		fmt.Printf("Liste: %d\n", len(list));
-
 		nlist = make([]string, len(list)+1);
 		copy(nlist,list);
 		list = nlist;
 		err = rows.Scan(&name)
 		if err != nil {
-			log.Fatal(err)
+			logging(LOG_ERROR, "getupdatelist", fmt.Sprint(err));
 			return list, fmt.Errorf("%s", err)
 		}
 		list[len(list)-1] = name
@@ -854,7 +869,7 @@ func SavePackages(db *sql.DB){
 
 	updatelist, err := GetUpdateList(db);
 	if err != nil {
-		fmt.Printf("SavePackages() Error: GetUpdateList(): %v\n", err);
+		logging(LOG_ERROR, "savepackages", fmt.Sprintf("GetUpdateList(): %v\n", err));
 	}
 
 @
@@ -887,7 +902,7 @@ func SavePackages(db *sql.DB){
 //				UpdatePackage(db, origin, "archive", path)
 //			}		
 		} else {
-			fmt.Printf("Could not found rollback package file: %s\n", path);
+			logging(LOG_ERROR, "savepackages", fmt.Sprintf("Could not found rollback package file: %s\n", path));
 		}
 	}	
 }
@@ -904,9 +919,9 @@ func Upgrade(){
 		err error;
 	)
 	cmdOut, err = RunCmd("upgrade");
-	fmt.Printf("Output Upgrade(): %s\n", cmdOut);
+	logging(LOG_STDOUT, "upgrade", fmt.Sprintf("Output Upgrade(): %s\n", cmdOut));
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error: ", string(cmdOut), err)
+		logging(LOG_ERROR, "upgrade", fmt.Sprintf("Error: ", string(cmdOut), err));
 	}
 }
 @
@@ -929,17 +944,17 @@ func RollbackPackage(db *sql.DB, name string){
 	)
 	
 	if path, err = GetPackageInfo(db, "archivepath", name); err != nil {
-		fmt.Printf("Error: %v\n", err);
+		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Error to get archivepath: %v", err));
 	}
 	
 	if (path == "NULL") {
-		fmt.Printf("Rollback Error: No rollback pkg available for package %s\n", name);
+		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback Error: No rollback pkg available for package %s\n", name));
 		return;
 	}
-	fmt.Printf("Rollback package: %s , pkg: %s\n",name, path);
+	logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s , pkg: %s\n",name, path))
 		
 	if cmdOut, err = RunCmd("install", path); err != nil {	
-		fmt.Fprintln(os.Stderr, "Error: ", err)
+		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Install error: %s\n", err));
 	}
 
 	/* Set status for success rollback
@@ -947,8 +962,7 @@ func RollbackPackage(db *sql.DB, name string){
 		UpdatePackage(db, "status", "update-available", "name", name);
 	}
 	*/
-
-	fmt.Printf("Output: %s\n", string(cmdOut));
+	logging(LOG_DEBUG, "rollbackpackage", fmt.Sprintf("Output: %s\n", string(cmdOut)))
 	return;
 }
 @
@@ -1005,7 +1019,7 @@ func LockPackage(db *sql.DB, lock int, name string) string {
 	)
 
 	if lockstatus, err = GetPackageInfo(db, "lockstatus", name); err != nil {	
-		fmt.Println("LockPackage() Error\n");
+		logging(LOG_ERROR, "lockpackage", fmt.Sprintf("Error: %v", err));
 	}
 	if (lockstatus == "ENOEXIST") {
 		lockstatus = "Package not exists"
@@ -1026,14 +1040,12 @@ func LockPackage(db *sql.DB, lock int, name string) string {
 	switch lock {
 		case 0:
 			if _, err = RunCmd("unlock", name); err != nil {	
-				fmt.Printf("Unlock package: %s\n", name)
-				fmt.Fprintln(os.Stderr, "Unlock pkg Error: ", err)
+				logging(LOG_ERROR, "lockpackage", fmt.Sprintf("Unlock pkg error: %v", err));
 			}				
 
 		case 1:
 			if _, err = RunCmd("lock", name); err != nil {	
-				fmt.Println("Lock package cmd: %v", name)
-				fmt.Fprintln(os.Stderr, "Error: ", err)
+				logging(LOG_ERROR, "lockpackage", fmt.Sprintf("Lock pkg error: %v", err));
 			}	
 		default:
 			lockstatus = "Not supported lock mode";
@@ -1073,11 +1085,11 @@ func LockExclude(db *sql.DB, lock int) {
 		case 1:
 			mode = "Lock";
 		default:
-			fmt.Printf("Not supported");
+			logging(LOG_ERROR, "lockexclude", fmt.Sprintf("The lock id is not supported"));
 			return;			
 	}
 	for _,name := range config.ExcludePackages {
-		fmt.Printf("%s exclude package %s: %s\n", mode, name, LockPackage(db, lock, name));
+		logging(LOG_INFO, "lockexclude", fmt.Sprintf("%s exclude package %s: %s\n", mode, name, LockPackage(db, lock, name)));
 	}
 }
 @
@@ -1167,11 +1179,10 @@ func Scheduler(db *sql.DB){
 		recur, err = time.Parse(time.RFC822, value);
 	}
 	if(err != nil) {
-		fmt.Println(err);
+		logging(LOG_ERROR, "scheduler", fmt.Sprintf("Cannot parse schedule value: %s", err));
 	}
 
-//DEBUG
-	fmt.Printf("Recurring time: %v:%v\n", recur.Hour(), recur.Minute());
+	logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recurring time: %v:%v\n", recur.Hour(), recur.Minute()));
 
 	LastCheck = time.Now();
 	RecurUnixStamp = (recur.Hour()*3600)+(recur.Minute()*60);	
@@ -1183,8 +1194,8 @@ func Scheduler(db *sql.DB){
         
 		LastCheck = TimeNow;
 		if ((diff <= (0 - int64(sleeptimer)-int64(tolerance))) || (diff > (int64(sleeptimer)+int64(tolerance)))) {
-			fmt.Printf("Time jump detected \n");
-			fmt.Printf("Set AlreadyRun to false");
+			logging(LOG_INFO, "scheduler", "Time jump detected");
+			logging(LOG_INFO, "scheduler", "Set AlreadyRun to false");
 			AlreadyRun = false;
 		}		
 
@@ -1205,7 +1216,8 @@ func Scheduler(db *sql.DB){
 			}			
 
 			if (Run == true) {
-				fmt.Printf("Scheduled Time reached, start job\n");
+				logging(LOG_EVENT, "scheduler", fmt.Sprintf("Scheduled Time reached, start job"));
+
 				SyncPkgDatabases(db);
 				CheckUpdates(db);
 				if config.ArchiveEnable {
@@ -1231,15 +1243,11 @@ func Scheduler(db *sql.DB){
 		}
 
 		if ((Ticker >= (86400-sleeptimer-tolerance)) && (AlreadyRun == true)){
-			fmt.Printf("Set AlreadyRun to false");
+			logging(LOG_INFO, "scheduler", fmt.Sprintf("New day detect, set AlreadyRunn to false"));
 			AlreadyRun = false;
 		}
 
-// DEBUG
-//      fmt.Printf("Diff: %v | Last: %v | Now: %v \n", diff, LastCheck.Unix(), time.Now().Unix());
-//      fmt.Printf("DayStart: %d | Already Run: %v | Ticker: %d\n\n", unixdayzero, AlreadyRun, Ticker);
-
-		fmt.Printf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v\n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun);
+		logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v\n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun));
 
         RunCmd("sleep", strconv.Itoa(sleeptimer));
 	}
@@ -1284,8 +1292,6 @@ One problem could be appear if a pkg have more then one service script, like apa
 
 <<pkg-updated.go: services>>=
 func ScanEnabledServices(db *sql.DB){
-	fmt.Printf("SES: Start");
-
 	if (config.RestartDaemons == true) {
 		var (
 			pkgorigin string;
@@ -1296,15 +1302,13 @@ func ScanEnabledServices(db *sql.DB){
 			cmdout string;
 		)
 		enabled = 0;
-
-fmt.Printf("SVC: Clear service table: \n");	
 		
 		_, err = db.Exec("DELETE FROM services");
 		if err != nil {
-			log.Printf("Error: %s\n", err);
+			logging(LOG_ERROR, "scanenabledservices", fmt.Sprintf("Truncated service db: failed | Error: %s", err));
 			return;
 		}	
-		fmt.Printf("done\n");
+		logging(LOG_INFO, "scanenabledservices", "Truncated service db: done");
 		
 		absolute := "/usr/local/etc/rc.d/";				
 		files,_ := ioutil.ReadDir(absolute)
@@ -1316,16 +1320,16 @@ fmt.Printf("SVC: Clear service table: \n");
 				if err == nil {
 
 					pkgname, err = GetPackageInfo(db, "name", chop(pkgorigin), "packages", "origin");
-
-fmt.Printf("SVC: Pkgname for origin %s: %s\n", chop(pkgorigin), pkgname);
-fmt.Printf("SVC: Add %s: %s\n", pkgname, svc);
+				
+					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Pkgname for origin %s: %s\n", chop(pkgorigin), pkgname));
+					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Add %s: %s\n", pkgname, svc));
 
 					ret,cmdout,err = ScanScript(svc, cmdout);
 					if (ret != 0) {
-						fmt.Printf("SVC: %s is enabled\n", svc);
+						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is enabled\n", svc));
 						enabled = 1;
 					} else {
-						fmt.Printf("SVC: %s not is enabled\n", svc);
+						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is not enabled\n", svc));
 						enabled = 0;				
 					}
 					AddService(db, pkgname, svc, enabled);
@@ -1382,7 +1386,7 @@ func RestartService(svc string) (int, error) {
 	)
 	cmdOut,err := RunCmd("restart", svc);
 	if err != nil {
-		fmt.Printf("SVC: Could not restart: %s | cmdOut: %v\n", svc, cmdOut);
+		logging(LOG_ERROR, "restartservice", fmt.Sprintf("Service: Could not restart: %s | cmdOut: %v\n", svc, cmdOut));
 		ret = 1;
 	}
 	return ret, err;
@@ -1392,30 +1396,103 @@ func RestartService(svc string) (int, error) {
 \newpage
 \subsection{Reporting}
 
-Ideas:
-
-- define types (events, ...)
-- Create extra db for output (date-time, type, facility, message) (like syslog)
-- Log all reports to db
-- create extra program for extra files from db and print out
-
-
-For general reporting, we need a logging to file function
+For general reporting, we need a logging to file function and a client program to read the informations from the database.
 First we need the module for log.
 
 <<pkg-updated.go: modules>>=
 "log"
 @
 
+Need to define some constants for eventtypes.
+
+<<pkg-updated.go: variables>>=
+	const LOG_FATAL = "FATAL";
+	const LOG_DEBUG = "DEBUG";
+	const LOG_INFO = "INFO";
+	const LOG_ERROR = "ERROR";
+	const LOG_EVENT = "EVENT";
+	const LOG_STDOUT = "CONSOLE_STDOUT";
+	const LOG_STDERR = "CONSOLE_STDERR";
+@
+
 The logging function does .....
 
+Output on console if debug mode is enable as parameter
+config.FileExistsNoLog is for avoid endles log loop if reportdb not exists and the create db function will log this error.
+
 <<pkg-updated.go: logging>>=
+func logging(logtype string, facility string, msg string){
+	recordtime := time.Now();
+	die := 0;
+	if (logtype == "fatal"){
+		die = 1;
+	}
+	if (*config.Param_DebugMode == true) {
+		fmt.Printf("[%s][%s] at %s: %s\n",logtype, facility, recordtime, msg);
+	}
 
-func logging(text string){
-	return;
+	config.FileExistsNoLog = true;
+	ret := FileExists(config.ReportDatabaseFile);	
+	if ret == 0 {
+
+		ret := AddLogToDB(recordtime, logtype, facility, msg);	
+		if ret != 0 {
+			fmt.Printf("Report DB not working");
+		}
+	}
+	
+	/* Need to die if fatal error happend */
+	if (die >= 1){
+		os.Exit(die);
+	}
 }
-
 @
+
+The [[AddLogDB]] function ...
+
+<<pkg-updated.go: sqlite-connect>>=
+func AddLogToDB(recordtime time.Time, logtype string, facility string, msg string) int {
+	reportdb := OpenDB(config.ReportDatabaseFile);
+	defer reportdb.Close();
+	
+	tx, err := reportdb.Begin();
+	if err != nil {
+		fmt.Printf("Error in open reportdb: %s\n", err);
+		return -1
+	}
+	stmt, err := tx.Prepare("insert into report(timestamp, eventtype, facility, message) values(?, ?, ?, ?)");
+	if err != nil {
+		fmt.Printf("Error in insert into reportdb: %s\n", err);
+		return -1;
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(recordtime.Unix(), logtype, facility, msg);
+
+	if err != nil {
+		fmt.Printf("Error in insert into reportdb: %s\n", err);
+		return -1;
+	}
+	tx.Commit();
+	return 0;
+}
+@
+
+
+
+Now comes the report client program.
+This program just reads the entries from the report db and sort it by day, week or month.
+
+The idea to create a report like with three importent informats.
+1) How much packages were upgraded in the last day/week/month
+2) Does rollbacks or other unexpected events occurs 
+3) Are the system is uptodate or action are needed ?
+
+<<pkg-updated-report.go: main>>=
+func main(){
+
+}
+@
+
 
 \newpage
 \subsection{Parameters}
@@ -1423,6 +1500,15 @@ func logging(text string){
 Define the parameters for [[pkg-updated]].
 
 -d | --debug	-> debug all messages
+
+<<pkg-updated.go: modules>>=
+"flag"
+@
+
+<<pkg-updated.go: parameter>>=
+config.Param_DebugMode = flag.Bool("debug", false, "Run in debug mode");
+flag.Parse();
+@
 
 
 \newpage
@@ -1478,12 +1564,13 @@ func RunCmd(cmd string, opts... string) (string, error) {
 
 	cmdArgs = append(cmdArgs, opts...);
 	
-/* DEBUG: */	
-	fmt.Printf("cmd: %s ", cmdName);
+	var cmdline bytes.Buffer;
+	cmdline.WriteString(cmdName)
 	for _,value := range cmdArgs {
-		fmt.Printf("%s ", value)
+		cmdline.WriteString(" ")
+		cmdline.WriteString(value)
 	}
-	fmt.Printf("\n");
+	logging(LOG_DEBUG, "runcmd", fmt.Sprintf("cmd: % ", cmdline));
 
 	cmdOut, err = exec.Command(cmdName, cmdArgs...).CombinedOutput(); 
 
@@ -1491,7 +1578,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 }
 @
 
-A small chop function
+A small chop function for removing the new line char of a string.
 
 <<pkg-updated.go: chop>>=
 func chop(s string) string {
@@ -1564,6 +1651,27 @@ import (
 
 <<pkg-updated.go: main>>
 @
+
+The structure of the pkg-update-report program.
+
+<<pkg-updated-report.go>>=
+<<license>>
+
+package main
+
+import (
+	<<pkg-updated-report.go: modules>>
+);
+
+<<version>>
+<<pkg-updated.go: variables>>
+<<pkg-updated.go: readconfig>>
+<<pkg-updated.go: sqlite-connect>>
+<<pkg-updated.go: sqlite-connect>>
+
+<<pkg-updated-report.go: main>>
+@
+
 
 
 \newpage
