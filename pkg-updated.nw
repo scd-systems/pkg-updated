@@ -205,22 +205,19 @@ To use json, we need the json package
 @
 
 <<pkg-updated.go: readconfig>>=
-func ReadConfig() int {
+func ReadConfig() {
 	configfile, err := os.Open(config_file);
 	if err != nil {
-		logging(LOG_ERROR, "readconfig-openfile", err.Error());
-		return -1;
+		logging(LOG_FATAL, "readconfig", fmt.Sprintf("Cannot open config file: %s", config_file));
 	}
 	defer configfile.Close();
 
 	jsonParser := json.NewDecoder(configfile)
 	
 	if err = jsonParser.Decode(&config); err != nil {
-		logging(LOG_ERROR, "readconfig-decode", err.Error());
-		return -1;
+		logging(LOG_FATAL, "readconfig", fmt.Sprint("Failed to read/parse config: %s", err));
 	}
 	logging(LOG_DEBUG, "readconfig-parsed", fmt.Sprint(config));
-	return 0;
 }
 @
 <<TODO>>=
@@ -317,15 +314,6 @@ func FileExists(filename string) int {
 	return 0;
 }
 
-func FileExistsNoLog(filename string) int {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return -1;
-	}
-	return 0;
-}
-
-
 func OpenDB(filename string) *sql.DB {
 	db, err := sql.Open("sqlite3", filename);
 	if err != nil {
@@ -369,7 +357,7 @@ func CountRows(db *sql.DB, table string, column string, search string) int {
 		logging(LOG_ERROR, "countrows", fmt.Sprint(err));
 		return -1;
 	}
-	logging(LOG_DEBUG, "countrows", fmt.Sprintf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d\n", table, column, search, result));
+	logging(LOG_DEBUG, "countrows", fmt.Sprintf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d", table, column, search, result));
 	return result
 }
 @
@@ -480,7 +468,7 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 		query = "UPDATE packages SET "+set_field+" = ? WHERE "+where_field+" = ?";
 	}
 
-	logging(LOG_DEBUG, "updatepackage", fmt.Sprintf("sql query: %s | Params: %s;%s\n", query, set_value, where_value));
+	logging(LOG_DEBUG, "updatepackage", fmt.Sprintf("sql query: %s | Params: %s;%s", query, set_value, where_value));
 	
 	stmt, err := tx.Prepare(query);
 	if err != nil {
@@ -609,7 +597,6 @@ func main(){
 
 <<pkg-updated.go: parameter>>
 
-logging(LOG_EVENT, "init", "Start pkg-updated"); 
 @
 
 At first, we read the configuration file and initialize the Database connections.
@@ -618,20 +605,17 @@ The report database will just open once for creating.
 After creating the report db, the file handle will close for access the report db again.
 
 <<pkg-updated.go: main>>=
-	ret := ReadConfig();
+	ReadConfig();
 
-	logging(LOG_EVENT, "main", "Reading config"); 
-
-	if ret != 0 {
-		logging(LOG_FATAL, "main", "Failed to read configuration, stop working"); 
-	}
+	logging(LOG_EVENT, "main", "Started pkg-updated"); 
 
 // Need to find a better code for open file only if exists and not before test file.
-			
+
+	var ret int;			
 	db := OpenDB(config.DatabaseFile);
 	defer db.Close();
 	ret = FileExists(config.DatabaseFile);	
-	logging(LOG_INFO, "main", fmt.Sprintf("Check packages Database %s: %d \n", config.DatabaseFile, ret));	
+	logging(LOG_INFO, "main", fmt.Sprintf("Check packages Database %s: %d", config.DatabaseFile, ret));	
 
 	if ret != 0 {
 		ret = CreateDatabase(db, 0);
@@ -644,7 +628,7 @@ After creating the report db, the file handle will close for access the report d
 	}
 	
 	ret = FileExists(config.ReportDatabaseFile);	
-	logging(LOG_INFO, "main", fmt.Sprintf("Check report Database %s: %d \n", config.ReportDatabaseFile, ret));	
+	logging(LOG_INFO, "main", fmt.Sprintf("Check report Database %s: %d", config.ReportDatabaseFile, ret));	
 
 	if ret != 0 {
 		reportdb := OpenDB(config.ReportDatabaseFile);
@@ -869,7 +853,7 @@ func SavePackages(db *sql.DB){
 
 	updatelist, err := GetUpdateList(db);
 	if err != nil {
-		logging(LOG_ERROR, "savepackages", fmt.Sprintf("GetUpdateList(): %v\n", err));
+		logging(LOG_ERROR, "savepackages", fmt.Sprintf("GetUpdateList(): %v", err));
 	}
 
 @
@@ -902,7 +886,7 @@ func SavePackages(db *sql.DB){
 //				UpdatePackage(db, origin, "archive", path)
 //			}		
 		} else {
-			logging(LOG_ERROR, "savepackages", fmt.Sprintf("Could not found rollback package file: %s\n", path));
+			logging(LOG_ERROR, "savepackages", fmt.Sprintf("Could not found rollback package file: %s", path));
 		}
 	}	
 }
@@ -919,7 +903,7 @@ func Upgrade(){
 		err error;
 	)
 	cmdOut, err = RunCmd("upgrade");
-	logging(LOG_STDOUT, "upgrade", fmt.Sprintf("Output Upgrade(): %s\n", cmdOut));
+	logging(LOG_STDOUT, "upgrade", fmt.Sprintf("Output Upgrade(): %s", cmdOut));
 	if err != nil {
 		logging(LOG_ERROR, "upgrade", fmt.Sprintf("Error: ", string(cmdOut), err));
 	}
@@ -948,13 +932,13 @@ func RollbackPackage(db *sql.DB, name string){
 	}
 	
 	if (path == "NULL") {
-		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback Error: No rollback pkg available for package %s\n", name));
+		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback Error: No rollback pkg available for package %s", name));
 		return;
 	}
-	logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s , pkg: %s\n",name, path))
+	logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s , pkg: %s",name, path))
 		
 	if cmdOut, err = RunCmd("install", path); err != nil {	
-		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Install error: %s\n", err));
+		logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Install error: %s", err));
 	}
 
 	/* Set status for success rollback
@@ -962,7 +946,7 @@ func RollbackPackage(db *sql.DB, name string){
 		UpdatePackage(db, "status", "update-available", "name", name);
 	}
 	*/
-	logging(LOG_DEBUG, "rollbackpackage", fmt.Sprintf("Output: %s\n", string(cmdOut)))
+	logging(LOG_DEBUG, "rollbackpackage", fmt.Sprintf("Output: %s", string(cmdOut)))
 	return;
 }
 @
@@ -1089,7 +1073,7 @@ func LockExclude(db *sql.DB, lock int) {
 			return;			
 	}
 	for _,name := range config.ExcludePackages {
-		logging(LOG_INFO, "lockexclude", fmt.Sprintf("%s exclude package %s: %s\n", mode, name, LockPackage(db, lock, name)));
+		logging(LOG_INFO, "lockexclude", fmt.Sprintf("%s exclude package %s: %s", mode, name, LockPackage(db, lock, name)));
 	}
 }
 @
@@ -1182,7 +1166,7 @@ func Scheduler(db *sql.DB){
 		logging(LOG_ERROR, "scheduler", fmt.Sprintf("Cannot parse schedule value: %s", err));
 	}
 
-	logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recurring time: %v:%v\n", recur.Hour(), recur.Minute()));
+	logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recurring time: %v:%v", recur.Hour(), recur.Minute()));
 
 	LastCheck = time.Now();
 	RecurUnixStamp = (recur.Hour()*3600)+(recur.Minute()*60);	
@@ -1247,7 +1231,7 @@ func Scheduler(db *sql.DB){
 			AlreadyRun = false;
 		}
 
-		logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v\n", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun));
+		logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun));
 
         RunCmd("sleep", strconv.Itoa(sleeptimer));
 	}
@@ -1321,15 +1305,15 @@ func ScanEnabledServices(db *sql.DB){
 
 					pkgname, err = GetPackageInfo(db, "name", chop(pkgorigin), "packages", "origin");
 				
-					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Pkgname for origin %s: %s\n", chop(pkgorigin), pkgname));
-					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Add %s: %s\n", pkgname, svc));
+					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Pkgname for origin %s: %s", chop(pkgorigin), pkgname));
+					logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Add %s: %s", pkgname, svc));
 
 					ret,cmdout,err = ScanScript(svc, cmdout);
 					if (ret != 0) {
-						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is enabled\n", svc));
+						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is enabled", svc));
 						enabled = 1;
 					} else {
-						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is not enabled\n", svc));
+						logging(LOG_DEBUG, "scanenabledservices", fmt.Sprintf("Service: %s is not enabled", svc));
 						enabled = 0;				
 					}
 					AddService(db, pkgname, svc, enabled);
@@ -1386,7 +1370,7 @@ func RestartService(svc string) (int, error) {
 	)
 	cmdOut,err := RunCmd("restart", svc);
 	if err != nil {
-		logging(LOG_ERROR, "restartservice", fmt.Sprintf("Service: Could not restart: %s | cmdOut: %v\n", svc, cmdOut));
+		logging(LOG_ERROR, "restartservice", fmt.Sprintf("Service: Could not restart: %s | cmdOut: %v", svc, cmdOut));
 		ret = 1;
 	}
 	return ret, err;
@@ -1424,17 +1408,25 @@ config.FileExistsNoLog is for avoid endles log loop if reportdb not exists and t
 func logging(logtype string, facility string, msg string){
 	recordtime := time.Now();
 	die := 0;
-	if (logtype == "fatal"){
-		die = 1;
-	}
+
+	// Normal: events,
+	// Debug: ALL
+
 	if (*config.Param_DebugMode == true) {
 		fmt.Printf("[%s][%s] at %s: %s\n",logtype, facility, recordtime, msg);
+	} else {
+		if (logtype == LOG_EVENT){
+			fmt.Printf("%s\n", msg);
+		}
 	}
 
+	if (logtype == "FATAL"){
+		die = 1;
+	}
+	
 	config.FileExistsNoLog = true;
 	ret := FileExists(config.ReportDatabaseFile);	
 	if ret == 0 {
-
 		ret := AddLogToDB(recordtime, logtype, facility, msg);	
 		if ret != 0 {
 			fmt.Printf("Report DB not working");
