@@ -1,4 +1,4 @@
-// 1673 "pkg-updated.nw"
+// 1727 "pkg-updated.nw"
 /*
 Copyright (c) SCD-SYSTEMS.NET
 
@@ -45,18 +45,18 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// 1623 "pkg-updated.nw"
+// 1676 "pkg-updated.nw"
 package main
 
 import (
 
-	// 204 "pkg-updated.nw"
+	// 203 "pkg-updated.nw"
 	"encoding/json"
-	// 282 "pkg-updated.nw"
+	// 280 "pkg-updated.nw"
 	"fmt"
 	"os"
 	"strconv"
-	// 295 "pkg-updated.nw"
+	// 293 "pkg-updated.nw"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	// 763 "pkg-updated.nw"
@@ -69,22 +69,24 @@ import (
 	"io/ioutil"
 	// 1387 "pkg-updated.nw"
 	"log"
-	// 1497 "pkg-updated.nw"
+	// 1508 "pkg-updated.nw"
+	"os/user"
+	// 1550 "pkg-updated.nw"
 	"flag"
-	// 1627 "pkg-updated.nw"
+	// 1680 "pkg-updated.nw"
 )
 
 // 8 "pkg-updated.nw"
 var (
 	MAJOR_VERSION = 0
 	MINOR_VERSION = 2
-	PATCH_VERSION = 6
+	PATCH_VERSION = 7
 )
 
-// 175 "pkg-updated.nw"
+// 174 "pkg-updated.nw"
 const config_file = "./pkg-updated.conf"
 
-// 181 "pkg-updated.nw"
+// 180 "pkg-updated.nw"
 var config struct {
 	RecurTime                       string   `json:"schedule"`
 	StrictRecurTime                 bool     `json:"schedule-in-time"`
@@ -106,6 +108,7 @@ var config struct {
 
 // 1393 "pkg-updated.nw"
 const LOG_FATAL = "FATAL"
+const LOG_FATAL2 = "FATAL2"
 const LOG_DEBUG = "DEBUG"
 const LOG_INFO = "INFO"
 const LOG_ERROR = "ERROR"
@@ -113,7 +116,30 @@ const LOG_EVENT = "EVENT"
 const LOG_STDOUT = "CONSOLE_STDOUT"
 const LOG_STDERR = "CONSOLE_STDERR"
 
-// 208 "pkg-updated.nw"
+// 1514 "pkg-updated.nw"
+func Check() {
+	var ret int
+
+	account, err := user.Current()
+	if err != nil {
+		logging(LOG_FATAL, "check", fmt.Sprintf("Could not detect user id: %s", err))
+	}
+
+	if account.Uid != "0" {
+		if config.UseSudo == false {
+			logging(LOG_EVENT, "check", "Warning: Program started as user without sudo usage, maybe it will not work !!!")
+		}
+	}
+
+	if config.UseSudo == true {
+		ret = FileExists("/usr/local/bin/sudo")
+		if ret != 0 {
+			logging(LOG_FATAL, "check", "Error: No sudo binary (/usr/local/bin/sudo ) found, please install sudo")
+		}
+	}
+}
+
+// 207 "pkg-updated.nw"
 func ReadConfig() {
 	configfile, err := os.Open(config_file)
 	if err != nil {
@@ -129,7 +155,7 @@ func ReadConfig() {
 	logging(LOG_DEBUG, "readconfig-parsed", fmt.Sprint(config))
 }
 
-// 304 "pkg-updated.nw"
+// 302 "pkg-updated.nw"
 func FileExists(filename string) int {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -154,14 +180,14 @@ func OpenDB(filename string) *sql.DB {
 
 func CreateDatabase(db *sql.DB, id int) int {
 
-	// 575 "pkg-updated.nw"
+	// 573 "pkg-updated.nw"
 	var DBSchema []string
 	DBSchema = make([]string, 2)
 	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);"
-	// 587 "pkg-updated.nw"
+	// 585 "pkg-updated.nw"
 	DBSchema[1] = "CREATE TABLE report (id INTEGER NOT NULL PRIMARY KEY, timestamp INTEGER, eventtype TEXT, facility TEXT, message TEXT NOT NULL); CREATE INDEX report_type ON report (eventtype COLLATE NOCASE);"
 
-	// 330 "pkg-updated.nw"
+	// 328 "pkg-updated.nw"
 	_, err := db.Exec(DBSchema[id])
 	if err != nil {
 		logging(LOG_ERROR, "createdb", fmt.Sprintf("Schema: %s | error: %s", DBSchema[id], err))
@@ -170,7 +196,7 @@ func CreateDatabase(db *sql.DB, id int) int {
 	return 0
 }
 
-// 352 "pkg-updated.nw"
+// 350 "pkg-updated.nw"
 func CountRows(db *sql.DB, table string, column string, search string) int {
 	var result int
 
@@ -183,7 +209,7 @@ func CountRows(db *sql.DB, table string, column string, search string) int {
 	return result
 }
 
-// 368 "pkg-updated.nw"
+// 366 "pkg-updated.nw"
 func GetPackageInfo(db *sql.DB, field string, pkgname string, opts ...string) (string, error) {
 	var (
 		result string
@@ -243,7 +269,7 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts ...string) (s
 	return result, nil
 }
 
-// 431 "pkg-updated.nw"
+// 429 "pkg-updated.nw"
 func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {
 	tx, err := db.Begin()
 	if err != nil {
@@ -266,7 +292,7 @@ func AddPackage(db *sql.DB, name string, origin string, version string, status s
 	return 0
 }
 
-// 457 "pkg-updated.nw"
+// 455 "pkg-updated.nw"
 func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field string, where_value string, opts ...string) int {
 	var query string
 
@@ -298,7 +324,7 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 	return 0
 }
 
-// 492 "pkg-updated.nw"
+// 490 "pkg-updated.nw"
 func GetAllPackages(db *sql.DB) ([]string, error) {
 	var (
 		result []string
@@ -329,7 +355,7 @@ func GetAllPackages(db *sql.DB) ([]string, error) {
 	return result, err
 }
 
-// 528 "pkg-updated.nw"
+// 526 "pkg-updated.nw"
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {
 	tx, err := db.Begin()
 	if err != nil {
@@ -352,33 +378,33 @@ func AddService(db *sql.DB, name string, svccmd string, enabled int) int {
 	return 0
 }
 
-// 1446 "pkg-updated.nw"
+// 1456 "pkg-updated.nw"
 func AddLogToDB(recordtime time.Time, logtype string, facility string, msg string) int {
 	reportdb := OpenDB(config.ReportDatabaseFile)
 	defer reportdb.Close()
 
 	tx, err := reportdb.Begin()
 	if err != nil {
-		fmt.Printf("Error in open reportdb: %s\n", err)
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Error to open reportdb: %s", err))
 		return -1
 	}
 	stmt, err := tx.Prepare("insert into report(timestamp, eventtype, facility, message) values(?, ?, ?, ?)")
 	if err != nil {
-		fmt.Printf("Error in insert into reportdb: %s\n", err)
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err))
 		return -1
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(recordtime.Unix(), logtype, facility, msg)
 
 	if err != nil {
-		fmt.Printf("Error in insert into reportdb: %s\n", err)
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err))
 		return -1
 	}
 	tx.Commit()
 	return 0
 }
 
-// 1408 "pkg-updated.nw"
+// 1409 "pkg-updated.nw"
 func logging(logtype string, facility string, msg string) {
 	recordtime := time.Now()
 	die := 0
@@ -397,13 +423,21 @@ func logging(logtype string, facility string, msg string) {
 	if logtype == "FATAL" {
 		die = 1
 	}
+	if logtype == "FATAL2" {
+		fmt.Printf("%s\n", msg)
+		os.Exit(2)
+	}
 
 	config.FileExistsNoLog = true
 	ret := FileExists(config.ReportDatabaseFile)
 	if ret == 0 {
 		ret := AddLogToDB(recordtime, logtype, facility, msg)
 		if ret != 0 {
-			fmt.Printf("Report DB not working")
+			if *config.Param_DebugMode == true {
+				fmt.Printf("[ERROR][logging] at %s: Report DB not working\n", recordtime)
+			} else {
+				fmt.Printf("Report DB not working\n")
+			}
 		}
 	}
 
@@ -413,7 +447,7 @@ func logging(logtype string, facility string, msg string) {
 	}
 }
 
-// 1512 "pkg-updated.nw"
+// 1565 "pkg-updated.nw"
 func RunCmd(cmd string, opts ...string) (string, error) {
 	var (
 		cmdName string
@@ -474,7 +508,7 @@ func RunCmd(cmd string, opts ...string) (string, error) {
 	return string(cmdOut), err
 }
 
-// 1576 "pkg-updated.nw"
+// 1629 "pkg-updated.nw"
 func chop(s string) string {
 	return s[0 : len(s)-1]
 }
@@ -982,15 +1016,16 @@ func Scheduler(db *sql.DB) {
 	}
 }
 
-// 596 "pkg-updated.nw"
+// 595 "pkg-updated.nw"
 func main() {
 
-	// 1501 "pkg-updated.nw"
+	// 1554 "pkg-updated.nw"
 	config.Param_DebugMode = flag.Bool("debug", false, "Run in debug mode")
 	flag.Parse()
 
-	// 608 "pkg-updated.nw"
+	// 607 "pkg-updated.nw"
 	ReadConfig()
+	Check()
 
 	logging(LOG_EVENT, "main", "Started pkg-updated")
 

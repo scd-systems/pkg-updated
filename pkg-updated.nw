@@ -8,9 +8,15 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=6
+	PATCH_VERSION=7
 )
 @
+
+\newpage
+\section{The Idea}
+
+Simple package update daemon for automated pkg update.
+The pkg-updated tackle the update by using the pkg command.
 
 <<TODO>>=
 Legend:
@@ -25,7 +31,7 @@ Ideas:
 	- [/] Version 0.3: Readme / Howto use
 	- [/] Version 0.3: Parametrized program
 	- Version 0.3: finalize pkg rollback for failed updates
-	- Version 0.4: Check userid and sudo usage
+	- [/] Version 0.4: Check userid and sudo usage
 	- [/] Version 0.4: Reporting / Logging
 	- Version 0.4: Reporting client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
@@ -50,13 +56,6 @@ Bugs:
 	http://blog.golang.org/go-slices-usage-and-internals
 
 @
-
-
-\newpage
-\section{The Idea}
-
-Simple package update daemon for automated pkg update.
-The pkg-updated tackle the update by using the pkg command.
 
 \newpage
 \subsection{Configuration}
@@ -268,7 +267,6 @@ The daemon must re-install the old package and mark the update as broken.
 
 7) Rollback packages if the service restart was not succesful. In this case, we expect a wrong package and hope the rollback will 
 bring the system back in stable mode.
-
 
 \newpage
 \section{Get current installed packages from existing Database}
@@ -590,7 +588,8 @@ The Reporting Database needs follow schema
 \newpage
 \section{Detailed workflow}
 
-The main function. ....
+First parse all parameters and then read config and handle errors.
+Afterwards check and open the database.
 
 <<pkg-updated.go: main>>=
 func main(){
@@ -606,6 +605,7 @@ After creating the report db, the file handle will close for access the report d
 
 <<pkg-updated.go: main>>=
 	ReadConfig();
+	Check();
 
 	logging(LOG_EVENT, "main", "Started pkg-updated"); 
 
@@ -1391,6 +1391,7 @@ Need to define some constants for eventtypes.
 
 <<pkg-updated.go: variables>>=
 	const LOG_FATAL = "FATAL";
+	const LOG_FATAL2 = "FATAL2";
 	const LOG_DEBUG = "DEBUG";
 	const LOG_INFO = "INFO";
 	const LOG_ERROR = "ERROR";
@@ -1399,10 +1400,10 @@ Need to define some constants for eventtypes.
 	const LOG_STDERR = "CONSOLE_STDERR";
 @
 
-The logging function does .....
+The logging function does print all log message to the standard out if debug mode is enabled.
+If the debug mode is not enabled, only events and fatal2 message types are printed to the standard out.
+The config.FileExistsNoLog is for avoid endles log loop if reportdb not exists and the create db function will log this error.
 
-Output on console if debug mode is enable as parameter
-config.FileExistsNoLog is for avoid endles log loop if reportdb not exists and the create db function will log this error.
 
 <<pkg-updated.go: logging>>=
 func logging(logtype string, facility string, msg string){
@@ -1423,13 +1424,21 @@ func logging(logtype string, facility string, msg string){
 	if (logtype == "FATAL"){
 		die = 1;
 	}
+	if (logtype == "FATAL2"){
+		fmt.Printf("%s\n", msg);
+		os.Exit(2);
+	}
 	
 	config.FileExistsNoLog = true;
 	ret := FileExists(config.ReportDatabaseFile);	
 	if ret == 0 {
 		ret := AddLogToDB(recordtime, logtype, facility, msg);	
 		if ret != 0 {
-			fmt.Printf("Report DB not working");
+			if (*config.Param_DebugMode == true) {
+				fmt.Printf("[ERROR][logging] at %s: Report DB not working\n", recordtime);
+			} else {
+				fmt.Printf("Report DB not working\n");			
+			}
 		}
 	}
 	
@@ -1440,7 +1449,8 @@ func logging(logtype string, facility string, msg string){
 }
 @
 
-The [[AddLogDB]] function ...
+The [[AddLogDB]] function write all log messages into the database.
+With the [[pkg-updated-report]] messages from the database can be exported as report.
 
 <<pkg-updated.go: sqlite-connect>>=
 func AddLogToDB(recordtime time.Time, logtype string, facility string, msg string) int {
@@ -1449,19 +1459,19 @@ func AddLogToDB(recordtime time.Time, logtype string, facility string, msg strin
 	
 	tx, err := reportdb.Begin();
 	if err != nil {
-		fmt.Printf("Error in open reportdb: %s\n", err);
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Error to open reportdb: %s", err));
 		return -1
 	}
 	stmt, err := tx.Prepare("insert into report(timestamp, eventtype, facility, message) values(?, ?, ?, ?)");
 	if err != nil {
-		fmt.Printf("Error in insert into reportdb: %s\n", err);
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(recordtime.Unix(), logtype, facility, msg);
 
 	if err != nil {
-		fmt.Printf("Error in insert into reportdb: %s\n", err);
+		logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err));
 		return -1;
 	}
 	tx.Commit();
@@ -1481,17 +1491,60 @@ The idea to create a report like with three importent informats.
 
 <<pkg-updated-report.go: main>>=
 func main(){
-
+	// report-db-client MAIN
 }
 @
 
+\newpage
+\section{Check before run the program}
+
+Before the the program will start, some pre-checks are required to be sure that no suprising errors occurs.
+
+We need to check if the program was started as user id 0 or not.
+Also check if sudo usage is configured and sudo binary are available.
+
+For get the user id, we use the os/user module.
+<<pkg-updated.go: modules>>=
+"os/user"
+@
+
+First we detect the current uid and verify that sudo binary exists if enabled to use in config.
+
+<<pkg-updated.go: check>>=
+func Check() {
+	var ret int;
+
+	account,err := user.Current(); 
+	if (err != nil) {
+		logging(LOG_FATAL, "check", fmt.Sprintf("Could not detect user id: %s", err));
+	}
+
+	if (account.Uid != "0") {
+		if (config.UseSudo == false){
+			logging(LOG_EVENT, "check", "Warning: Program started as user without sudo usage, maybe it will not work !!!");
+		}
+	}
+
+	if (config.UseSudo == true){
+		ret = FileExists("/usr/local/bin/sudo");
+		if (ret != 0){
+			logging(LOG_FATAL, "check", "Error: No sudo binary (/usr/local/bin/sudo ) found, please install sudo");
+		}
+	}
+}
+@
 
 \newpage
 \subsection{Parameters}
 
 Define the parameters for [[pkg-updated]].
 
--d | --debug	-> debug all messages
+<<pkg-updated-manpage>>=
+-d | --debug	debug all messages
+:
+:
+
+@
 
 <<pkg-updated.go: modules>>=
 "flag"
@@ -1628,6 +1681,7 @@ import (
 
 <<version>>
 <<pkg-updated.go: variables>>
+<<pkg-updated.go: check>>
 <<pkg-updated.go: readconfig>>
 <<pkg-updated.go: sqlite-connect>>
 <<pkg-updated.go: logging>>

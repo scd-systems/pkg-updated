@@ -10,7 +10,7 @@ Ideas:
         - [/] Version 0.3: Readme / Howto use
         - [/] Version 0.3: Parametrized program
         - Version 0.3: finalize pkg rollback for failed updates
-        - Version 0.4: Check userid and sudo usage
+        - [/] Version 0.4: Check userid and sudo usage
         - [/] Version 0.4: Reporting / Logging
         - Version 0.4: Reporting client command for generate report's
         - Version 0.5: Refactor all variable names and functions
