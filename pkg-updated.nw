@@ -1,3 +1,4 @@
+
 %% 					ATTENTION
 %%
 %%         	!!! Just edit the ".nw" File !!!
@@ -193,6 +194,7 @@ var config struct {
     DatabaseFile string `json:"database-file"`
     ReportDatabaseFile string `json:"report-database-file"`
     Param_DebugMode *bool;
+	Param_RunOnce *bool;
     FileExistsNoLog bool;
 };
 @
@@ -495,7 +497,11 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 		rows *sql.Rows;
 	)
 
-	if(len(opts) >= 0) {
+	if(len(opts) == 1) {
+		err = errors.New("To few paramters for GetAllPackages");
+		Logging(LOG_ERROR, "getallpackages", fmt.Sprint(err));
+		return result, err;
+	} else if(len(opts) >= 2) {
 		rows, err = db.Query("SELECT "+ opts[0] +" FROM "+ opts[1]);	
 	} else { 	
 		rows, err = db.Query("SELECT name FROM packages");
@@ -656,9 +662,13 @@ After database initialize, we switch over to the Scheduler.	And sleep for ever i
 Maybe need to implement some self-healing checks every five minutes or other tasks.
 
 <<pkg-updated.go: main>>=
-	go Scheduler(db);
-	for {
-		RunCmd("sleep", "300");	
+	if (*config.Param_RunOnce != true) {
+		go Scheduler(db);
+		for {
+			RunCmd("sleep", "300");	
+		}
+	} else {
+		UpdateRoutine(db);
 	}
 @
 <<TODO>>=
@@ -773,14 +783,15 @@ The commands to run are: [[pkg version]]
 
 We extract all available updates from pkg version command and update this information inside the DB.
 For the extraction, we parse the whole output from the exec command.
-
+If fund a package with a never version, set return status to true
 
 <<pkg-updated.go: check-updates>>=
-func CheckUpdates(db *sql.DB){
+func CheckUpdates(db *sql.DB) bool {
 	var (
-		cmdOut string
-		err    error
-		pkgname bytes.Buffer
+		cmdOut string;
+		err error;
+		pkgname bytes.Buffer;
+		ret bool;
 	)
 
 	cmdOut, err = RunCmd("version");
@@ -795,7 +806,9 @@ func CheckUpdates(db *sql.DB){
 	for n:=0;n<len(cmdOut);n++ {
 		if (cmdOut[n] == 60) {
 			UpdatePackage(db, "status", "update-available", "origin", pkgname.String());
+			Logging(LOG_DEBUG, "checkupdates", fmt.Sprintf("Update available for pkg: %s", pkgname.String()));
 			pkgname.Reset();
+			ret = true;
 			continue;
 		}
 		if (cmdOut[n] == 10) {
@@ -806,8 +819,79 @@ func CheckUpdates(db *sql.DB){
 			pkgname.WriteString(string(cmdOut[n]));
 		}
 	}
+	return ret;
 }
 @
+
+
+\newpage
+\subsection{The update routine}
+
+The [[UpdateRoutine]] handle the workflow for the update the packages.
+If the scheduled time match against current time informations, the update procedure needs to run.
+At first, the pkg-updated database needs to be synced with all existing packages from local exist packages.
+After syncing, all configured excluded packages needs to be locked.
+In the next step, all current configured enabled services needs to be detected.
+If this preperations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
+
+<<pkg-updated.go: updateroutine>>=
+func UpdateRoutine(db *sql.DB) (bool) {
+	var (
+		ret bool;
+		updates_available bool;
+	)
+	
+	Logging(LOG_EVENT, "updateroutine", "Start update routine");
+	SyncPkgDatabases(db);
+
+	updates_available = CheckUpdates(db);
+
+	if (updates_available == true) {
+		Logging(LOG_EVENT, "updateroutine", "Updates available");
+
+		if config.ArchiveEnable {
+			Logging(LOG_EVENT, "updateroutine", "Save package");
+			SavePackages(db);
+		}
+		LockExclude(db, 1);
+		ScanEnabledServices(db)
+
+		if Upgrade() != 0 {
+			Logging(LOG_EVENT, "updateroutine", "Pkg Upgrade failed");
+			return ret;
+		}
+
+		if (config.RestartDaemons == true) {
+			svc, err := RestartEnabledServices(db);
+			if (err != nil) {
+				Logging(LOG_EVENT, "updateroutine", "Service restart failed");
+				if (config.DowngradePackageOnFailedRestart == true) {
+					Logging(LOG_EVENT, "updateroutine", "Starting rollback");
+					for _, pkgname := range svc {
+						RollbackPackage(db, pkgname);
+					}
+				}	
+			}
+		}
+
+		LockExclude(db, 0);
+	} else {
+		Logging(LOG_EVENT, "updateroutine", "No updates available");
+	}
+	/* Second RUN
+		Need to verify how it behaves 
+			
+		if config.ClearSyncDatabaseEnabled == true {
+			config.ClearSyncDatabaseEnabled = false
+		}
+		SyncPkgDatabases(db)		
+	*/
+			
+	ret = true;
+	return ret;
+}
+@
+
 
 \newpage
 \subsection{The update process}
@@ -1209,62 +1293,11 @@ func Scheduler(db *sql.DB){
 			} else {
 				Run = true;
 			}			
-@
-
-If the scheduled time match against current time informations, the update procedure needs to run.
-At first, the pkg-updated database needs to be synced with all existing packages from local exist packages.
-After syncing, all configured excluded packages needs to be locked.
-In the next step, all current configured enabled services needs to be detected.
-If this preperations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
-
-<<pkg-updated.go: scheduler>>=
 			if (Run == true) {
 				Logging(LOG_EVENT, "scheduler", fmt.Sprintf("Scheduled Time reached, start job"));
-
-				SyncPkgDatabases(db);
-				CheckUpdates(db);
-				if config.ArchiveEnable {
-					SavePackages(db);
+				if (UpdateRoutine(db) == true) {
+					AlreadyRun = true;
 				}
-				LockExclude(db, 1);
-				ScanEnabledServices(db)
-	
-				if Upgrade() != 0 {
-					Logging(LOG_EVENT, "scheduler", "Upgrade failed");
-					continue;
-				}
-
-				/* RollBack if enabled services can't be restarted
-
-				// need to get failed reestarts
-
-				if (config.RestartDaemon == true) {
-					svc, err := RestartEnabledServices(db);
-					if (err != 0) {
-						Logging(LOG_EVENT, "scheduler", "Service restart failed");
-						if (config.DowngradePackageOnFailedRestart == true) {
-							Logging(LOG_EVENT, "scheduler", "Starting rollback");
-							for pkgname := _,range svc {
-								RollBackPackage(db, name);
-							}
-						}	
-					}
-				}
-				*/ 
-
-				LockExclude(db, 0);
-
-	
-				/* Second RUN
-					Need to verify how it behaves 
-				
-				if config.ClearSyncDatabaseEnabled == true {
-					config.ClearSyncDatabaseEnabled = false
-				}
-				SyncPkgDatabases(db)
-				*/
-				
-				AlreadyRun = true;
 				Run = false;
 			}
 		}
@@ -1466,6 +1499,7 @@ First we need the module for log.
 
 <<pkg-updated.go: modules>>=
 "log"
+"errors"
 @
 
 Need to define some constants for eventtypes.
@@ -1627,7 +1661,7 @@ Define the parameters for [[pkg-updated]].
 
 <<pkg-updated-manpage>>=
 -d | --debug	debug all messages
-:
+-r | --runone	Disable the scheduler and run only one time and exit
 :
 
 @
@@ -1638,6 +1672,7 @@ Define the parameters for [[pkg-updated]].
 
 <<pkg-updated.go: parameter>>=
 config.Param_DebugMode = flag.Bool("debug", false, "Run in debug mode");
+config.Param_RunOnce = flag.Bool("runonce", false, "Run only once, disable scheduler");
 flag.Parse();
 @
 
@@ -1783,6 +1818,7 @@ import (
 <<pkg-updated.go: rollback>>
 <<pkg-updated.go: services>>
 <<pkg-updated.go: update>>
+<<pkg-updated.go: updateroutine>>
 <<pkg-updated.go: scheduler>>
 
 <<pkg-updated.go: main>>

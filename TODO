@@ -41,6 +41,7 @@ Bugs:
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
 // 20160305: Need to find a better way instead of sleep !
 // 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
+// 20160316: UpdateRoutine: Need to detect if update is available or not.
 // TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
 // TODO: Need to use nil error return correctly !
 // 20160201: Implement error handling
