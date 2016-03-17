@@ -34,6 +34,8 @@ Ideas:
 	- [/] Version 0.3: finalize pkg rollback for failed updates
 	- [/] Version 0.4: Check userid and sudo usage
 	- [/] Version 0.4: Reporting / Logging
+
+	- check upgrade was done succesful before restart a service !
 	- Version 0.4: Reporting client command for generate report's
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
@@ -340,9 +342,8 @@ In addition some other functions are needed, like add package with name and stat
 The function [[GetPackageInfo]] is used to report the current information's of a package.
 
 <<TODO>>=
-// TODO: function + Return code 	-> string, retcode/error
+// TODO: function + Return code -> string, retcode/error
 // TODO: AddPackageDB: detect duplicate entries and avoid !!!
-// TODO: Use function handling with: func name(arg1 int, rest...);
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
 @
 
@@ -532,8 +533,8 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 @
 
 
-Add Service function.
-Need enable as parameter as soon as enabled service detection is ready and working:
+Add an enabled service into the service db.
+Need enable as parameter as soon as enabled service detection is ready and working.
 
 <<pkg-updated.go: sqlite-connect>>=
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {	
@@ -554,7 +555,6 @@ func AddService(db *sql.DB, name string, svccmd string, enabled int) int {
 		return -1;
 	}
 	tx.Commit();
-		
 	return 0;
 }
 @
@@ -616,13 +616,16 @@ If databases not exists, we create them.
 The report database will just open once for creating.
 After creating the report db, the file handle will close for access the report db again.
 
+<<TODO>>=
+//20160210 Need to find a better code for open file only if exists and not before test file.
+@
+
 <<pkg-updated.go: main>>=
 	ReadConfig();
 	Check();
 
 	Logging(LOG_EVENT, "main", "Started pkg-updated"); 
 
-// Need to find a better code for open file only if exists and not before test file.
 
 	var ret int;			
 	db := OpenDB(config.DatabaseFile);
@@ -794,10 +797,16 @@ func CheckUpdates(db *sql.DB) bool {
 		ret bool;
 	)
 
-	cmdOut, err = RunCmd("version");
-
+	cmdOut, err = RunCmd("update");
 	if err != nil {
 		Logging(LOG_ERROR, "checkupdates", fmt.Sprintf("There was an error running pkg command: %s", err));
+		return false;
+	}
+
+	cmdOut, err = RunCmd("version");
+	if err != nil {
+		Logging(LOG_ERROR, "checkupdates", fmt.Sprintf("There was an error running pkg command: %s", err));
+		return false;
 	}
 
 	// 60 == '<'
@@ -822,7 +831,6 @@ func CheckUpdates(db *sql.DB) bool {
 	return ret;
 }
 @
-
 
 \newpage
 \subsection{The update routine}
@@ -853,7 +861,7 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			Logging(LOG_EVENT, "updateroutine", "Save package");
 			SavePackages(db);
 		}
-		LockExclude(db, 1);
+		<<pkg-updated.go: lockexclude>>
 		ScanEnabledServices(db)
 
 		if Upgrade() != 0 {
@@ -873,13 +881,12 @@ func UpdateRoutine(db *sql.DB) (bool) {
 				}	
 			}
 		}
-
-		LockExclude(db, 0);
+		<<pkg-updated.go: unlockexclude>>
 	} else {
 		Logging(LOG_EVENT, "updateroutine", "No updates available");
 	}
 	/* Second RUN
-		Need to verify how it behaves 
+		Need to verify how it behaves
 			
 		if config.ClearSyncDatabaseEnabled == true {
 			config.ClearSyncDatabaseEnabled = false
@@ -891,7 +898,6 @@ func UpdateRoutine(db *sql.DB) (bool) {
 	return ret;
 }
 @
-
 
 \newpage
 \subsection{The update process}
@@ -1063,14 +1069,6 @@ But we must unlock the package after the update/upgrade is done.
 And, we must be sure, that already locked packages are not unlocked.
 So we must save the current lock before begin to lock excluded packages.
 And we must unlock the packages again, except of already locked packages after upgrade is done
-
-%Under some circumstances, you do not want to update packages automatically.
-%For this case, the pkg system have a lock feature, which we can use to lock packages before we update the packages.
-%Afterwards the package will unlocked.
-%One problem must be tackled anyhow. 
-%If a packaged already locked before pkg-updated is running, the program must keep the lock status after update is done.
-%So we check all current locked packages and save this information into the pkg-update db.
-
 First of all, we need a function to set and get the lockstatus.
 I decide to use one function to use, because locking is either set or you just want to know the status.
 
@@ -1175,9 +1173,8 @@ func LockExclude(db *sql.DB, lock int) {
 <<pkg-updated.go: lockexclude>>=
 	LockExclude(db,1);
 @
-
 <<pkg-updated.go: unlockexclude>>=
-//	LockExclude(db,0);
+	LockExclude(db,0);
 @
 
 
@@ -1697,7 +1694,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		case "install":
 			cmdArg1 = []string{"install", "-y", "-f"};
 		case "update":
-			cmdArg1 = []string{"update", "-y", "-f"};
+			cmdArg1 = []string{"update", "-f"};
 		case "lock":
 			cmdArg1 = []string{"lock", "-y"};
 		case "unlock":
