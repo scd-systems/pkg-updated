@@ -9,7 +9,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=2
-	PATCH_VERSION=8
+	PATCH_VERSION=9
 )
 @
 
@@ -22,25 +22,23 @@ The pkg-updated tackle the update by using the pkg command.
 <<TODO>>=
 Legend:
 [/]	=	Feature implemented but not tested enough / not stable
-[x]	=	Featute implemented and stable
+[x]	=	Feature implemented and stable
 
 Ideas: 
-	- For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
-	- For Reporting: Output from updated pkg messages must be interpret to add in report as well 
 	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
 	- [/] Version 0.3: Readme / Howto use
 	- [/] Version 0.3: Parametrized program
-	- [/] Version 0.3: finalize pkg rollback for failed updates
+	- [x] Version 0.3: finalize pkg rollback for failed updates
 	- [/] Version 0.4: Check userid and sudo usage
-	- [/] Version 0.4: Reporting / Logging
-
-	- check upgrade was done succesful before restart a service !
-	- Version 0.4: Reporting client command for generate report's
+	- [x] Version 0.4: Reporting / Logging
+	- [/]Version 0.4: Reporting client command for generate report's
+	- Version 0.4: Add weekdays as recurring option in scheduler
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
 	- Version 0.5: Port
 	- Version 0.5: rc.d script
+	- Version 0.5: Add Output from updated pkg messages to reportdb
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
@@ -161,7 +159,6 @@ All rollback package information's are lost, so no automate rollback possible !
 <<pkg-updated.conf>>=
 	"fresh-db-sync-on-start": false
 @
-
 
 <<pkg-updated.conf>>=
 }
@@ -426,7 +423,7 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 }
 @
 
-Add package and update package function !
+The [[AddPackage]] function store pkg related informations to the database [[pkg-updated.sqlite]].
 
 <<pkg-updated.go: sqlite-connect>>=
 func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {	
@@ -625,8 +622,7 @@ After creating the report db, the file handle will close for access the report d
 	Check();
 
 	Logging(LOG_EVENT, "main", "Started pkg-updated"); 
-
-
+	
 	var ret int;			
 	db := OpenDB(config.DatabaseFile);
 	defer db.Close();
