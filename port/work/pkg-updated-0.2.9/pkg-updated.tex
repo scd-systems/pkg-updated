@@ -1,0 +1,105 @@
+%%%
+%%% Preamble
+%%%
+
+%% Design Wahl
+\documentclass[11pt,a4paper,oneside]{article}
+
+% Umlaute Fonts
+\usepackage[latin9]{inputenc}
+\usepackage[ngerman]{babel}
+% \usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{basicstyle=\footnotesize\ttfamily,breaklines=true}
+%\lstset{framextopmargin=50pt,frame=bottomline}
+% Courier f. Listings
+\usepackage{courier}
+% Für Griechisch (Micro) Zeichen
+\usepackage{textcomp} 
+\lstloadlanguages{R}
+% Runde Klammern
+%\usepackage[square]{natbib}
+% Viereckige Klammern
+\usepackage[square,sort,comma,numbers]{natbib}
+% Für Bildtextumläufe option [H] verwenden
+\usepackage{float}
+\usepackage{subfigure}
+% Table: Multirow
+\usepackage{multirow}
+% Rotation 
+\usepackage{rotating}
+% NoWeb
+\usepackage{noweb}
+% PDFs Einbinden
+\usepackage{pdfpages}
+\usepackage{hyperref}
+
+\definecolor{LinkColor}{rgb}{0.18,0,0.44}
+\hypersetup{
+  pdfauthor={C. Dornig},
+  pdftitle={pkg-updated},
+  colorlinks=true,
+  urlcolor=blue,
+  linkcolor=LinkColor
+}
+\noweboptions{smallcode,english,externalindex}
+\usepackage{url,graphicx,boxedminipage,a4wide}
+\newcommand\hexaddr[1]{{\small\tt 0x#1}}
+
+\newcommand{\eg}{e.\,g.}
+
+% for indexing (definitions from Felix)
+% plain index, additional term to be added (does not appear in text)
+\newcommand{\pindex}[1]{\index{#1}}
+% like plain index, term is sorted according to first argument but
+% typeset as second argument (example: \pcindex{TeX}{\TeX{}})
+\newcommand{\pcindex}[2]{\index{#1@#2}}
+% verbatim index, term appears in index and in text as is
+\newcommand{\vindex}[1]{#1\index{#1}}
+%
+% indicate where work needs to be done
+\newenvironment{work}{\noindent\begin{boxedminipage}{\textwidth}}{\end{boxedminipage}}
+
+\newcommand{\shellcmd}[1]{{\tt #1}}
+\newcommand{\codesymbol}{*}
+\newcommand{\codesection}[1]{\section{#1\codesymbol{}}}
+
+% give normal text in math formulas
+\newcommand{\text}[1]{\mbox{#1}}
+
+% Zitate: ,,...´´ mit \anf
+\newcommand{\DQ}[1]{\glqq{}#1\grqq{}}
+
+% NoWEB: Remove to much whitespace in the buttom of the pages
+\def\nwendcode{\endtrivlist \endgroup}
+\let\nwdocspar=\par
+
+% Abkürzungsverzeichnis Modul
+% \usepackage{nomencl}
+% \let\Abbrev\nomenclature
+% \renewcommand{\nomname}{Abkürzungsverzeichnis} 
+% Den Abstand zwischen Abkürzung und Erklärung mit Punkten auffüllen
+% \setlength{\nomlabelwidth}{.50\hsize}
+% \renewcommand{\nomlabel}[1]{#1 \dotfill}
+% \setlength{\nomitemsep}{-\parsep}
+
+%%%%
+
+\begin{document}
+\setcounter{tocdepth}{4}
+
+\input{titlepage.tex}
+
+%Inhaltsverzeichnis
+%\PrintContents
+\tableofcontents 
+\pagenumbering{Roman}
+
+%%% Text
+\pagenumbering{arabic}
+
+\newpage
+\input{content}
+
+\end{document}

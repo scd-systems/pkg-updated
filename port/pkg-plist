@@ -1,0 +1,4 @@
+bin/pkg-updated
+etc/pkg-updated.conf
+share/doc/pkg-updated/pkg-updated.pdf
+@dirrm share/doc/pkg-updated

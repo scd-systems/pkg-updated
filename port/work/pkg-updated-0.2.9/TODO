@@ -1,22 +1,22 @@
 Legend:
 [/]     =       Feature implemented but not tested enough / not stable
-[x]     =       Feature implemented and stable
+[x]     =       Featute implemented and stable
 
 Ideas: 
+        - For Reporting: Reports about pkg updates needs to report too, and maybe take care of commands running afterwards
+        - For Reporting: Output from updated pkg messages must be interpret to add in report as well 
         - [x] Version 0.2: Alpha version
         - [x] Version 0.3: Scheduler
         - [/] Version 0.3: Readme / Howto use
         - [/] Version 0.3: Parametrized program
-        - [x] Version 0.3: finalize pkg rollback for failed updates
+        - [/] Version 0.3: finalize pkg rollback for failed updates
         - [/] Version 0.4: Check userid and sudo usage
-        - [x] Version 0.4: Reporting / Logging
-        - [/]Version 0.4: Reporting client command for generate report's
-        - Version 0.4: Add weekdays as recurring option in scheduler
+        - [/] Version 0.4: Reporting / Logging
+        - Version 0.4: Reporting client command for generate report's
         - Version 0.5: Refactor all variable names and functions
         - Version 0.5: Proper error handling
-        - [/] Version 0.5: Port / without using gmake
+        - Version 0.5: Port
         - Version 0.5: rc.d script
-        - Version 0.5: Add Output from updated pkg messages to reportdb
         - Version 0.5: Finish book and publish first public beta
         - Version 0.6: Fix bugs and Performance issues
         - Version 0.7: FreeBSD Port and SelfUpdate routine
@@ -35,12 +35,13 @@ Bugs:
         http://blog.golang.org/go-slices-usage-and-internals
 
 // 20160309: Need to set default config parameters if no parameters set in configfile
-// TODO: function + Return code -> string, retcode/error
+// TODO: function + Return code         -> string, retcode/error
 // TODO: AddPackageDB: detect duplicate entries and avoid !!!
+// TODO: Use function handling with: func name(arg1 int, rest...);
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
-//20160210 Need to find a better code for open file only if exists and not before test file.
 // 20160305: Need to find a better way instead of sleep !
 // 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
+// 20160316: UpdateRoutine: Need to detect if update is available or not.
 // TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
 // TODO: Need to use nil error return correctly !
 // 20160201: Implement error handling

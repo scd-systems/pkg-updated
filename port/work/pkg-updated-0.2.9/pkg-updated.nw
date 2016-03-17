@@ -36,7 +36,7 @@ Ideas:
 	- Version 0.4: Add weekdays as recurring option in scheduler
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
-	- [/] Version 0.5: Port / without using gmake
+	- Version 0.5: Port
 	- Version 0.5: rc.d script
 	- Version 0.5: Add Output from updated pkg messages to reportdb
 	- Version 0.5: Finish book and publish first public beta
