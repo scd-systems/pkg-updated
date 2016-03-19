@@ -30,7 +30,7 @@ Ideas:
 	- [/] Version 0.3: Readme / Howto use
 	- [/] Version 0.3: Parametrized program
 	- [x] Version 0.3: finalize pkg rollback for failed updates
-	- [/] Version 0.4: Check userid and sudo usage
+	- [x] Version 0.4: Check userid and sudo usage
 	- [x] Version 0.4: Reporting / Logging
 	- [/]Version 0.4: Reporting client command for generate report's
 	- Version 0.4: Add weekdays as recurring option in scheduler
@@ -99,6 +99,16 @@ Instead it will start at 09:00PM
 
 <<pkg-updated.conf>>=
 	"schedule-in-time": true,
+@
+
+On which days the updates should be scheduled.
+Days are mapped to numbers like in cron. 0,7 = Sunday, 1 = Monday ... 6 = Saturday.
+Leave it empty to run every day, same as fill from 0 to 6.
+
+<<pkg-updated.conf>>=
+	"schedule-days": [
+		0, 1, 2, 3, 4, 5, 6
+	],
 @
 
 
@@ -181,6 +191,7 @@ var config struct {
 	RecurTime string `json:"schedule"`
 	StrictRecurTime bool `json:"schedule-in-time"`
 	ExcludePackages []string `json:"exclude-packages"`
+	RecurDays[]int `json:"schedule-days"`
     CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
     DoFreebsdUpdate	bool `json:"do-freebsd-update"`
@@ -204,24 +215,32 @@ To use json, we need the json package
 "encoding/json"
 @
 
+Which function have readconfig ?
+Simple, just read and parse the config file.
+If file does not exists, stop working.
+
 <<pkg-updated.go: readconfig>>=
-func ReadConfig() {
+func ReadConfig() int {
 	configfile, err := os.Open(config_file);
-	if err != nil {
-		Logging(LOG_FATAL, "readconfig", fmt.Sprintf("Cannot open config file: %s", config_file));
-	}
 	defer configfile.Close();
 
+	if err != nil {
+		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Cannot open config file: %s", config_file));
+		return -1
+	}
 	jsonParser := json.NewDecoder(configfile)
 	
 	if err = jsonParser.Decode(&config); err != nil {
-		Logging(LOG_FATAL, "readconfig", fmt.Sprintf("Failed to read/parse config: %s", err));
+		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Failed to read/parse config: %s", err));
+		return -1
 	}
 	Logging(LOG_DEBUG, "readconfig-parsed", fmt.Sprint(config));
+	return 0;
 }
 @
 <<TODO>>=
 // 20160309: Need to set default config parameters if no parameters set in configfile
+// 20160318: Switch to proper config file format instead using of json format
 @
 
 
@@ -296,23 +315,7 @@ _ "github.com/mattn/go-sqlite3"
 @
 
 
-We need a function to verify if the pkg-updated database already exists or not.
-Also we need a function to initialize an empty database.
-
 <<pkg-updated.go: sqlite-connect>>=
-func FileExists(filename string) int {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		if (config.FileExistsNoLog == false) {
-			Logging(LOG_ERROR, "fileexists-stat", fmt.Sprint(err))
-		} else {
-			config.FileExistsNoLog = false;
-		}
-		return -1;
-	}
-	return 0;
-}
-
 func OpenDB(filename string) *sql.DB {
 	db, err := sql.Open("sqlite3", filename);
 	if err != nil {
@@ -618,7 +621,7 @@ After creating the report db, the file handle will close for access the report d
 @
 
 <<pkg-updated.go: main>>=
-	ReadConfig();
+
 	Check();
 
 	Logging(LOG_EVENT, "main", "Started pkg-updated"); 
@@ -1206,6 +1209,9 @@ But we need to detect jumps in both directions to handle daylight saving time co
 
 We need regexp module to detect the daytime format from the [[schedule]] config parameter value
 
+It will also check the current weekday with the configured schedule-day.
+Only if the scheduled time and scheduled-days are match, the [[UpdateRoutine]] function will call.
+
 <<pkg-updated.go: modules>>=
 "regexp"
 "time"
@@ -1223,7 +1229,8 @@ func Scheduler(db *sql.DB){
 		romandaytime bool;
 		sleeptimer int;
 		tolerance int;
-		Run bool;
+		checktime bool;
+		checkday bool;
 		diff int64;
 		diff2 int;
 		RecurUnixStamp int;
@@ -1255,6 +1262,7 @@ func Scheduler(db *sql.DB){
 	}
 
 	Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recurring time: %v:%v", recur.Hour(), recur.Minute()));
+	Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recurring days: %v", config.RecurDays));
 
 	LastCheck = time.Now();
 	RecurUnixStamp = (recur.Hour()*3600)+(recur.Minute()*60);	
@@ -1263,8 +1271,23 @@ func Scheduler(db *sql.DB){
 		TimeNow = time.Now();
 		diff = LastCheck.Unix() - TimeNow.Unix();
 		Ticker = (TimeNow.Hour()*3600)+(TimeNow.Minute()*60)+(TimeNow.Second());
-        
 		LastCheck = TimeNow;
+
+		// Check Recurring Day !
+		checkday = false;
+		if (len(config.RecurDays) > 0) {
+			for _,day := range config.RecurDays	{
+				if (day == int(TimeNow.Weekday())) {
+					Logging(LOG_DEBUG, "scheduler", "Weekday matched schedule-day");
+					checkday = true;
+				}
+			}
+		} else {
+			Logging(LOG_DEBUG, "scheduler", "Weekday matched schedule-day");
+			checkday = true;		
+		}
+
+		// Detect timejump        
 		if ((diff <= (0 - int64(sleeptimer)-int64(tolerance))) || (diff > (int64(sleeptimer)+int64(tolerance)))) {
 			Logging(LOG_INFO, "scheduler", "Time jump detected");
 			Logging(LOG_INFO, "scheduler", "Set AlreadyRun to false");
@@ -1276,22 +1299,23 @@ func Scheduler(db *sql.DB){
 		if ( (AlreadyRun == false) && ((TimeNow.Hour() > recur.Hour()) || ( (TimeNow.Hour() == recur.Hour()) && (TimeNow.Minute() >= recur.Minute()) ))) {
 
 			// If strict time is configured, check the 5 minute tolerance
-
 			if (config.StrictRecurTime == true){
-				Run = false;
+				checktime = false;
 				diff2 = Ticker - RecurUnixStamp;
 				if((diff2>0) && (diff2<300)) {
-					Run = true;
+					checktime = true;
 				}
 			} else {
-				Run = true;
+				checktime = true;
 			}			
-			if (Run == true) {
+
+			if ((checktime == true) && (checkday == true)) {
 				Logging(LOG_EVENT, "scheduler", fmt.Sprintf("Scheduled Time reached, start job"));
 				if (UpdateRoutine(db) == true) {
 					AlreadyRun = true;
 				}
-				Run = false;
+				checktime = false;
+				checkday = false;
 			}
 		}
 
@@ -1300,7 +1324,7 @@ func Scheduler(db *sql.DB){
 			AlreadyRun = false;
 		}
 
-		Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("Recur: %v:%v | Now: %v:%v | AlreadyRun: %v", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), AlreadyRun));
+		Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("RecurTime: %v:%v | Now: %v:%v | Weekday: %v | Weekday Match: %v | AlreadyRun: %v", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), int(TimeNow.Weekday()), checkday, AlreadyRun));
 
         RunCmd("sleep", strconv.Itoa(sleeptimer));
 	}
@@ -1536,7 +1560,7 @@ func Logging(logtype string, facility string, msg string){
 		fmt.Printf("%s\n", msg);
 		os.Exit(2);
 	}
-	
+
 	config.FileExistsNoLog = true;
 	ret := FileExists(config.ReportDatabaseFile);	
 	if ret == 0 {
@@ -1549,7 +1573,7 @@ func Logging(logtype string, facility string, msg string){
 			}
 		}
 	}
-	
+
 	/* Need to die if fatal error happend */
 	if (die >= 1){
 		os.Exit(die);
@@ -1567,19 +1591,19 @@ func AddLogToDB(recordtime time.Time, logtype string, facility string, msg strin
 	
 	tx, err := reportdb.Begin();
 	if err != nil {
-		Logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Error to open reportdb: %s", err));
+		Logging(LOG_FATAL2, "addlogtodb", fmt.Sprintf("Error to open reportdb: %s", err));
 		return -1
 	}
 	stmt, err := tx.Prepare("insert into report(timestamp, eventtype, facility, message) values(?, ?, ?, ?)");
 	if err != nil {
-		Logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err));
+		Logging(LOG_FATAL2, "addlogtodb", fmt.Sprintf("Can not insert into reportdb: %s", err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(recordtime.Unix(), logtype, facility, msg);
 
 	if err != nil {
-		Logging(LOG_FATAL2, "addtologdb", fmt.Sprintf("Can not insert into reportdb: %s", err));
+		Logging(LOG_FATAL2, "addlogtodb", fmt.Sprintf("Can not insert into reportdb: %s", err));
 		return -1;
 	}
 	tx.Commit();
@@ -1616,11 +1640,19 @@ For get the user id, we use the os/user module.
 "os/user"
 @
 
-First we detect the current uid and verify that sudo binary exists if enabled to use in config.
+First check if the config file exists and read it.
+Detect the current uid and verify that sudo binary exists if enabled to use in config.
 
 <<pkg-updated.go: check>>=
 func Check() {
 	var ret int;
+
+	ret = FileExists(config_file);
+	if (ret != 0) {
+		Logging(LOG_FATAL2, "check", fmt.Sprintf("Could not read config file: %s", config_file));
+	}
+
+	ReadConfig();
 
 	account,err := user.Current(); 
 	if (err != nil) {
@@ -1636,12 +1668,21 @@ func Check() {
 	if (config.UseSudo == true){
 		ret = FileExists("/usr/local/bin/sudo");
 		if (ret != 0){
-			Logging(LOG_FATAL, "check", "Error: No sudo binary (/usr/local/bin/sudo ) found, please install sudo");
+			Logging(LOG_FATAL2, "check", "Error: No sudo binary (/usr/local/bin/sudo ) found, please install sudo");
 		}
 	}
 	ret = FileExists("/var/db/pkg/local.sqlite");
 	if (ret != 0){
 		Logging(LOG_FATAL2, "check", "Error: No local pkg database exists");
+	}
+
+	if (len(config.RecurDays) > 7) {
+		Logging(LOG_FATAL2, "check", "Config-Error: To much entries in schedule-days");	
+	}
+	for _,value := range config.RecurDays {
+		if ((value < 0) || (value > 7)) {
+			Logging(LOG_FATAL2, "check", "Config-Error: Wrong day number in schedule-days, allowed only 0 to 7");
+		}
 	}
 
 }
@@ -1672,6 +1713,25 @@ flag.Parse();
 
 \newpage
 \subsection{Helper functions}
+
+
+We need a function to verify if the pkg-updated database already exists or not.
+Also we need a function to initialize an empty database.
+
+<<pkg-updated.go: fileexists>>=
+func FileExists(filename string) int {
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		if (config.FileExistsNoLog == false) {
+			Logging(LOG_ERROR, "fileexists", fmt.Sprint(err))
+		} else {
+			config.FileExistsNoLog = false;
+		}
+		return -1;
+	}
+	return 0;
+}
+@
 
 For running shell commands and reduce code, need a function to do all the necessary steps
 
@@ -1799,6 +1859,7 @@ import (
 
 <<version>>
 <<pkg-updated.go: variables>>
+<<pkg-updated.go: fileexists>>
 <<pkg-updated.go: check>>
 <<pkg-updated.go: readconfig>>
 <<pkg-updated.go: sqlite-connect>>
