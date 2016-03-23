@@ -8,8 +8,8 @@
 <<version>>=
 var (
 	MAJOR_VERSION=0
-	MINOR_VERSION=2
-	PATCH_VERSION=9
+	MINOR_VERSION=3
+	PATCH_VERSION=0
 )
 @
 
@@ -28,7 +28,7 @@ Ideas:
 	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
 	- [/] Version 0.3: Readme / Howto use
-	- [/] Version 0.3: Parametrized program
+	- [x] Version 0.3: Parametrized program
 	- [x] Version 0.3: finalize pkg rollback for failed updates
 	- [x] Version 0.4: Check userid and sudo usage
 	- [x] Version 0.4: Reporting / Logging
@@ -181,7 +181,7 @@ We must read and interpret the configuration file.
 The default config file name must be defined as well as the struct. 
 
 <<pkg-updated.go: variables>>=
-const config_file = "./pkg-updated.conf"; 
+const config_file = "/usr/local/etc/pkg-updated/pkg-updated.conf"; 
 @
 
 Made with: https://mholt.github.io/json-to-go/
@@ -205,6 +205,9 @@ var config struct {
     ReportDatabaseFile string `json:"report-database-file"`
     Param_DebugMode *bool;
 	Param_RunOnce *bool;
+	Param_ConfigFile *string;
+	Param_Help *bool;
+	Param_Version *bool;	
     FileExistsNoLog bool;
 };
 @
@@ -221,11 +224,13 @@ If file does not exists, stop working.
 
 <<pkg-updated.go: readconfig>>=
 func ReadConfig() int {
-	configfile, err := os.Open(config_file);
+	Logging(LOG_DEBUG, "readconfig", fmt.Sprintf("Read config file: %s", *config.Param_ConfigFile));
+
+	configfile, err := os.Open(*config.Param_ConfigFile);
 	defer configfile.Close();
 
 	if err != nil {
-		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Cannot open config file: %s", config_file));
+		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Cannot open config file: %s", *config.Param_ConfigFile));
 		return -1
 	}
 	jsonParser := json.NewDecoder(configfile)
@@ -1647,9 +1652,21 @@ Detect the current uid and verify that sudo binary exists if enabled to use in c
 func Check() {
 	var ret int;
 
-	ret = FileExists(config_file);
+	if (*config.Param_Help == true) {
+		HelpPage();
+	}
+
+	if (*config.Param_Version == true) {
+		Version();
+	}
+
+	if (len(*config.Param_ConfigFile) < 1) {
+		*config.Param_ConfigFile = config_file;
+	}
+
+	ret = FileExists(*config.Param_ConfigFile);
 	if (ret != 0) {
-		Logging(LOG_FATAL2, "check", fmt.Sprintf("Could not read config file: %s", config_file));
+		Logging(LOG_FATAL2, "check", fmt.Sprintf("Could not read config file: %s", *config.Param_ConfigFile));
 	}
 
 	ReadConfig();
@@ -1694,10 +1711,11 @@ func Check() {
 Define the parameters for [[pkg-updated]].
 
 <<pkg-updated-manpage>>=
--d | --debug	debug all messages
--r | --runone	Disable the scheduler and run only one time and exit
-:
-
+-help		Print help page
+-debug		debug all messages
+-runone		Disable the scheduler and run only one time and exit
+-config		Use different config (default: /usr/local/etc/pkg-updated/pkg-updated.conf)
+-version	Show version and exit
 @
 
 <<pkg-updated.go: modules>>=
@@ -1705,15 +1723,16 @@ Define the parameters for [[pkg-updated]].
 @
 
 <<pkg-updated.go: parameter>>=
+config.Param_Help = flag.Bool("help", false, "Show help page and exit");
+config.Param_Version = flag.Bool("version", false, "Show version and exit");
+config.Param_ConfigFile = flag.String("config", "", "Path to alternativ config file");
 config.Param_DebugMode = flag.Bool("debug", false, "Run in debug mode");
 config.Param_RunOnce = flag.Bool("runonce", false, "Run only once, disable scheduler");
 flag.Parse();
 @
 
-
 \newpage
 \subsection{Helper functions}
-
 
 We need a function to verify if the pkg-updated database already exists or not.
 Also we need a function to initialize an empty database.
@@ -1809,6 +1828,25 @@ func chop(s string) string {
 }
 @
 
+Help page and print version function
+
+<<pkg-updated.go: helpversion>>=
+func HelpPage() {
+	fmt.Printf("pkg-updated help:\n\n");
+	fmt.Printf("Usage: pkg-updated [-help] [-debug] [-config <FILENAME>] [-runonce] [-version]\n\n");
+	fmt.Printf("-help\t\tShow this page\n");
+	fmt.Printf("-config\t\tPath to config file to use\n");
+	fmt.Printf("-debug\t\tRuns in debug mode and prints all LOG types\n");
+	fmt.Printf("-runone\t\tDisable scheduler and just run once update procedure\n");
+	fmt.Printf("-version\tShow version and exit\n");
+	os.Exit(0);
+}
+
+func Version() {
+	fmt.Printf("pkg-update version: %d.%d.%d\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION);
+	os.Exit(0);
+}
+@
 
 \newpage
 \section{Installation of pkg-updated}
@@ -1816,12 +1854,24 @@ func chop(s string) string {
 \newpage
 \subsection{Install from source}
 
+Requirements:
+
+- tex-format for pdflatex
+- tex-dvipsk
+- noweb
+- go
+
 \newpage
 \subsection{Install from pkg-repo}
+
+pkg install pkg-updated
 
 \newpage
 \subsection{Install from Ports}
 
+portsnap fetch extract
+cd /usr/ports/sysutils/pkg-updated
+make install clean
 
 \newpage
 \subsection{Sudo config}
@@ -1859,6 +1909,7 @@ import (
 
 <<version>>
 <<pkg-updated.go: variables>>
+<<pkg-updated.go: helpversion>>
 <<pkg-updated.go: fileexists>>
 <<pkg-updated.go: check>>
 <<pkg-updated.go: readconfig>>
