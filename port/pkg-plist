@@ -1,3 +1,4 @@
 bin/pkg-updated
 etc/pkg-updated/pkg-updated.conf
+etc/rc.d/pkg-updated
 share/doc/pkg-updated/pkg-updated.pdf

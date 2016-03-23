@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# rc.d script for pkg-updated
+#
+# $Id$
+
+# PROVIDE: pkg-updated
+# REQUIRE: DAEMON
+# BEFORE: LOGIN
+# KEYWORD: shutdown
+#
+# Add the following line to /etc/rc.conf to enable pkg-updated:
+#
+#  #required
+#  pkg-updated_enable="YES"
+#
+
+. "/etc/rc.subr"
+
+# defaults
+pkg-updated_enable=${pkg-updated_enable:-"NO"}
+
+name=pkg-updated
+rcvar=pkg-updated_enable
+load_rc_config $name
+command=/usr/local/bin/pkg-updated
+# command_args=""
+
+run_rc_command "$1"
