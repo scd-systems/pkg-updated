@@ -1,30 +1,42 @@
-# New ports collection makefile for:   pkg-updated
-# Date created:        10 March 2016
-# Whom:                cdornig
-#
 # $FreeBSD$
-#
 
-PORTNAME=	pkg-updated
-PORTVERSION=	0.2.9
-CATEGORIES=	sysutils
+PORTNAME=		pkg-updated
+PORTVERSION=		0.2.9
+CATEGORIES=		sysutils
 
-MAINTAINER=	cd@scd-systems.net
-COMMENT=	A pkg update daemon
+MAINTAINER=		cd@scd-systems.net
+COMMENT=		Pkg update daemon
 
-LICENSE=	BSD3CLAUSE
+LICENSE=		BSD3CLAUSE
+LICENSE_FILE=		${WRKSRC}/LICENSE
 
-BUILD_DEPENDS=	go>=1.5.0:${PORTSDIR}/lang/go noweb:/devel/noweb gmake:${PORTSDIR}/devel/gmake
+BUILD_DEPENDS=		go>=1.5.0:${PORTSDIR}/lang/go noweb:${PORTSDIR}/devel/noweb
+USES=			gmake
 
-USE_GITHUB=	yes
-GH_ACCOUNT=	scd-systems
+USE_GITHUB=		yes
+GH_ACCOUNT=		scd-systems
 
-MAKEFILE=       BSDmakefile
+OPTIONS_DEFINE=		PDF
+PDF_DESC=		Create and install the documentation file (needs tex)
 
-# PORTDOCS=       INSTALL README THANKS
-INFO=           pkg-updated
-INSTALL_TARGET= all
+PDF_BUILD_DEPENDS+=	pdflatex:${PORTSDIR}/print/tex-formats dvips:${PORTSDIR}/print/tex-dvipsk
 
-# MAN1=		pkg-updated.1
+do-build:
+	${SETENV} ${BUILD_ENV} GOPATH=${WRKSRC} go install github.com/mattn/go-sqlite3;
+	${GMAKE} -C ${WRKSRC} extract;
+	${SETENV} ${BUILD_ENV} GOPATH=${WRKSRC} go build -o ${WRKSRC}/pkg-updated ${WRKSRC}/pkg-updated.go;
+	.if ${PORT_OPTIONS:PDF}
+		${GMAKE} -C ${WRKSRC} pdf;
+	.endif
+
+do-install:
+	${CP} ${WRKSRC}/pkg-updated ${STAGEDIR}/${PREFIX}/bin/pkg-updated
+	${STRIP_CMD} ${STAGEDIR}/${PREFIX}/bin/pkg-updated
+	${MKDIR} ${STAGEDIR}/${PREFIX}/etc/pkg-updated
+	${CP} ${WRKSRC}/pkg-updated.conf ${STAGEDIR}/${PREFIX}/etc/pkg-updated/pkg-updated.conf
+	.if ${PORT_OPTIONS:PDF}
+		${MKDIR} ${STAGEDIR}/${PREFIX}/share/doc/pkg-updated
+		${CP} ${WRKSRC}/pkg-updated.pdf ${STAGEDIR}/${PREFIX}/share/doc/pkg-updated
+	.endif
 
 .include <bsd.port.mk>
