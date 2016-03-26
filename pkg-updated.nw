@@ -9,7 +9,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=3
-	PATCH_VERSION=0
+	PATCH_VERSION=1
 )
 @
 
@@ -25,20 +25,21 @@ Legend:
 [x]	=	Feature implemented and stable
 
 Ideas: 
-	- [x] Version 0.2: Alpha version
 	- [x] Version 0.3: Scheduler
 	- [/] Version 0.3: Readme / Howto use
 	- [x] Version 0.3: Parametrized program
 	- [x] Version 0.3: finalize pkg rollback for failed updates
 	- [x] Version 0.4: Check userid and sudo usage
 	- [x] Version 0.4: Reporting / Logging
-	- [/]Version 0.4: Reporting client command for generate report's
-	- Version 0.4: Add weekdays as recurring option in scheduler
+	- [/] Version 0.4: Reporting client command for generate report's
+	- [x] Version 0.4: Add weekdays as recurring option in scheduler
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
-	- [/] Version 0.5: Port / without using gmake
-	- Version 0.5: rc.d script
+	- [x] Version 0.5: Port
+	- Version 0.5: Port without using gmake
+	- [/] Version 0.5: rc.d script
 	- Version 0.5: Add Output from updated pkg messages to reportdb
+	- Version 0.5: Syslog/Logfile
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
@@ -55,7 +56,6 @@ Bugs:
 	- SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
 	- wrong usage of Slices, read again:
 	http://blog.golang.org/go-slices-usage-and-internals
-
 @
 
 \newpage
@@ -208,6 +208,19 @@ var config struct {
 	Param_ConfigFile *string;
 	Param_Help *bool;
 	Param_Version *bool;	
+/*
+	Param_CreateReport *bool;
+	Param_ClearSyncDatabaseEnabled *bool;
+	Param_DoFreebsdUpdate *bool;
+	Param_RestartDaemons *bool;
+	Param_DowngradePackageOnFailedRestart *bool;
+	Param_UseSudo *bool;
+	Param_ArchiveEnable *bool;
+	Param_ArchiveFile *string;
+	Param_PkgDatabaseFile *string;
+	Param_DatabaseFile *string;
+	Param_ReportDatabaseFile *string;
+*/
     FileExistsNoLog bool;
 };
 @
@@ -1664,6 +1677,12 @@ func Check() {
 		*config.Param_ConfigFile = config_file;
 	}
 
+/*	Need to check the requirements and dependencies between:
+	If reporting is enabled, reportdb must exist
+		If report is disabled, reportdb check does not need to be run and also not log to DB
+	If enablerollback is true, the archive option must true as well
+*/
+
 	ret = FileExists(*config.Param_ConfigFile);
 	if (ret != 0) {
 		Logging(LOG_FATAL2, "check", fmt.Sprintf("Could not read config file: %s", *config.Param_ConfigFile));
@@ -1728,6 +1747,20 @@ config.Param_Version = flag.Bool("version", false, "Show version and exit");
 config.Param_ConfigFile = flag.String("config", "", "Path to alternativ config file");
 config.Param_DebugMode = flag.Bool("debug", false, "Run in debug mode");
 config.Param_RunOnce = flag.Bool("runonce", false, "Run only once, disable scheduler");
+
+/* need to find a way to overwrite config file settings with parameters, but only if parameter is set !
+config.Param_CreateReport = flag.Bool("reporting", true, "Create and use a report db for all events");
+config.Param_ClearSyncDatabaseEnabled = flag.Bool("cleardbonstart", false, "If pkg-updated db is already exists, truncate all informations before sync");
+config.Param_DoFreebsdUpdate = flag.Bool("enableosupdate", false, "Enable update of OS too");
+config.Param_RestartDaemons = flag.Bool("restartdaemons", true, "Restart enable services if an update affecte");
+config.Param_DowngradePackageOnFailedRestart = flag.Bool("enablerollback", true, "Rollback package if service restart failed, require -enablearchive true");
+config.Param_UseSudo = flag.Bool("sudo", false, "Use sudo for all commands");
+config.Param_ArchiveEnable = flag.Bool("enablearchive", true, "Create a backup package before upgrade, required for rollback");
+config.Param_ArchiveFile = flag.String("archivepath", "/var/db/pkg/pkg-updated", "In which directory should the pkg backups stored");
+config.Param_PkgDatabaseFile = flag.String("pkgdbfile", "/var/db/pkg/local.sqlite", "The local pkg database file");
+config.Param_DatabaseFile = flag.String("dbfile", "/var/db/pkg-updated/pkg-update.sqlite", "The pkg-updated database file");
+config.Param_ReportDatabaseFile = flag.String("reportdbfile", "/var/db/pkg-updated/report.sqlite", "The report database file");
+*/
 flag.Parse();
 @
 
@@ -1838,7 +1871,20 @@ func HelpPage() {
 	fmt.Printf("-config\t\tPath to config file to use\n");
 	fmt.Printf("-debug\t\tRuns in debug mode and prints all LOG types\n");
 	fmt.Printf("-runone\t\tDisable scheduler and just run once update procedure\n");
+/*
+	fmt.Printf("-reporting\tCreate and use a report db for all events");
+	fmt.Printf("-cleardbonstart\tIf pkg-updated db is already exists, truncate all informations before sync\n");
+	fmt.Printf("-enableosupdate\tEnable update of OS too\n");
+	fmt.Printf("-restartdaemons\tRestart enable services if an update affecte\n");
+	fmt.Printf("-enablerollback\tRollback package if service restart failed, require -enablearchive true\n");
+	fmt.Printf("-sudo\tUse sudo for all commands\n");
+	fmt.Printf("-enablearchive\tCreate a backup package before upgrade, required for rollback\n");
+	fmt.Printf("-archivepath <filename>\tIn which directory should the pkg backups stored\n");
+	fmt.Printf("-pkgdbfile <filename>\tThe local pkg database file\n");
+	fmt.Printf("-dbfile <filename>\tThe pkg-updated database file\n");
+	fmt.Printf("-reportdbfile <filename>\tThe report database file\n");
 	fmt.Printf("-version\tShow version and exit\n");
+*/
 	os.Exit(0);
 }
 

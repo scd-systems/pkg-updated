@@ -1,14 +1,15 @@
 UNAME:=$(shell uname)
 
+PRJNAME=pkg-updated
 TEXSRC_FILE=pkg-updated.nw
 TEX_FILE=pkg-updated.tex
 PROGRAM=pkg-updated.go
 CONFIG=pkg-updated.conf
 TODO=TODO
 MAN=pkg-updated-manpage
-major_version:=$(shell grep 'MAJOR_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2)
-minor_version:=$(shell grep 'MINOR_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2)
-patch_version:=$(shell grep 'PATCH_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2)
+major_version:=$(shell grep 'MAJOR_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2 | head -n 1)
+minor_version:=$(shell grep 'MINOR_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2 | head -n 1)
+patch_version:=$(shell grep 'PATCH_VERSION' $(TEXSRC_FILE) | cut -d"=" -f2 | head -n 1)
 date:=$(shell date)
 pwd:=$(shell pwd)
 
@@ -44,7 +45,7 @@ pdf:
 	@pdflatex ${TEX_FILE} >/dev/null
 	@pdflatex ${TEX_FILE} >/dev/null
 	@pdflatex ${TEX_FILE} >/dev/null
-	@echo "PDF File: ${TEX_FILE}.pdf are successfully created"
+	@echo "PDF File: ${PRJNAME}.pdf are successfully created"
 man:
 	# Make manpage tasks
 	

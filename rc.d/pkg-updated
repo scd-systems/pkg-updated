@@ -11,19 +11,40 @@
 #
 # Add the following line to /etc/rc.conf to enable pkg-updated:
 #
-#  #required
-#  pkg-updated_enable="YES"
+#  pkgupdated_enable (bool):    Set to "NO" by default
+#                               Set it to "YES" to enable pkg-updated
+#  pkgupdated_user (str):       Useraccount which is running as
+#  pkgupdated_flags (str):      Parameters for the command it self
 #
 
-. "/etc/rc.subr"
+. /etc/rc.subr
 
-# defaults
-pkg-updated_enable=${pkg-updated_enable:-"NO"}
+name=pkgupdated
+rcvar=pkgupdated_enable
 
-name=pkg-updated
-rcvar=pkg-updated_enable
 load_rc_config $name
-command=/usr/local/bin/pkg-updated
-# command_args=""
+
+: ${pkgupdated_enable="NO"}
+: ${pkgupdated_user="nobody"}
+: ${pkgupdated_flags=""}
+
+command="/usr/local/bin/pkg-updated"
+pidfile="/var/run/${name}.pid"
+
+start_cmd="${name}_start"
+
+pkgupdated_start()
+{
+	local pid
+	pid=check_pidfile $pidfile $command
+
+	if [ -n "${pid}" ]; then
+		echo "${name} already running (pid=${pid})";
+		return 1
+	fi
+	echo -n "Starting ${name}"
+	/usr/sbin/daemon -f -p ${pidfile} -u ${pkgupdated_user} ${command} ${pkgupdated_flags}
+	echo " ...done"
+}
 
 run_rc_command "$1"
