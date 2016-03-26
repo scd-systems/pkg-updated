@@ -35,7 +35,7 @@ Ideas:
 	- [x] Version 0.4: Add weekdays as recurring option in scheduler
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
-	- [x] Version 0.5: Port
+	- [/] Version 0.5: Port
 	- Version 0.5: Port without using gmake
 	- [/] Version 0.5: rc.d script
 	- Version 0.5: Add Output from updated pkg messages to reportdb
@@ -148,7 +148,7 @@ If the service restart command fail, should the related package downgrade to the
 PKG Archive directory for rollback operations 
 <<pkg-updated.conf>>=
 	"pkg-archive-enable": true,
-	"pkg-archive-directory": "./archive",
+	"pkg-archive-directory": "/var/db/pkg-updated/archive",
 @
 
 The pkg-updated Database file which contains the package informations.
@@ -158,8 +158,8 @@ The report-database-file is for logging and reporting of pkg-updated.
 
 <<pkg-updated.conf>>=
 	"pkg-database-file": "/var/db/pkg/local.sqlite",
-	"database-file": "./pkg-updated.sqlite",
-	"report-database-file": "./report.sqlite",
+	"database-file": "/var/db/pkg-updated/pkg-updated.sqlite",
+	"report-database-file": "/var/db/pkg-updated/report.sqlite",
 @
 
 Should the pkg-updated DB synchronized on every boot
@@ -199,7 +199,7 @@ var config struct {
     DowngradePackageOnFailedRestart	bool `json:"downgrade-package-on-failed-restart"`
 	UseSudo bool `json:"use-sudo"`
 	ArchiveEnable bool `json:"pkg-archive-enable"`
-    ArchiveFile string `json:"pkg-archive-directory"`
+    ArchivePath string `json:"pkg-archive-directory"`
     PkgDatabaseFile string `json:"pkg-database-file"`
     DatabaseFile string `json:"database-file"`
     ReportDatabaseFile string `json:"report-database-file"`
@@ -216,11 +216,11 @@ var config struct {
 	Param_DowngradePackageOnFailedRestart *bool;
 	Param_UseSudo *bool;
 	Param_ArchiveEnable *bool;
-	Param_ArchiveFile *string;
+*/
+	Param_ArchivePath *string;
 	Param_PkgDatabaseFile *string;
 	Param_DatabaseFile *string;
 	Param_ReportDatabaseFile *string;
-*/
     FileExistsNoLog bool;
 };
 @
@@ -244,13 +244,11 @@ func ReadConfig() int {
 
 	if err != nil {
 		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Cannot open config file: %s", *config.Param_ConfigFile));
-		return -1
 	}
 	jsonParser := json.NewDecoder(configfile)
 	
 	if err = jsonParser.Decode(&config); err != nil {
 		Logging(LOG_FATAL2, "readconfig", fmt.Sprintf("Failed to read/parse config: %s", err));
-		return -1
 	}
 	Logging(LOG_DEBUG, "readconfig-parsed", fmt.Sprint(config));
 	return 0;
@@ -978,16 +976,16 @@ func SavePackages(db *sql.DB){
 <<pkg-updated.go: update>>=
 	for _, pkg := range updatelist {
 		version, err = GetPackageInfo(db, "version", pkg);
-		path = config.ArchiveFile + "/" + pkg + "-" + version + ".txz";
+		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz";
 		if _, err := os.Stat(path); err != nil {
-			RunCmd("create", config.ArchiveFile, pkg)
+			RunCmd("create", config.ArchivePath, pkg)
 			index++;
 		}
 	}
 
 	for _, pkg := range updatelist {
 		version, err = GetPackageInfo(db, "version", pkg);
-		path = config.ArchiveFile + "/" + pkg + "-" + version + ".txz";
+		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz";
 		if _, err := os.Stat(path); err == nil {
 			origin, err = GetPackageInfo(db, "origin", pkg);
 @
@@ -1538,6 +1536,7 @@ First we need the module for log.
 @
 
 Need to define some constants for eventtypes.
+The event type [[LOG_FATAL2]] will additional exit the program after save/print the log information
 
 <<pkg-updated.go: variables>>=
 	const LOG_FATAL = "FATAL";
@@ -1629,8 +1628,6 @@ func AddLogToDB(recordtime time.Time, logtype string, facility string, msg strin
 }
 @
 
-
-
 Now comes the report client program.
 This program just reads the entries from the report db and sort it by day, week or month.
 
@@ -1661,6 +1658,11 @@ For get the user id, we use the os/user module.
 First check if the config file exists and read it.
 Detect the current uid and verify that sudo binary exists if enabled to use in config.
 
+Need to check the requirements and dependencies between:
+	If reporting is enabled, reportdb must exist
+		If report is disabled, reportdb check does not need to be run and also not log to DB
+	If enablerollback is true, the archive option must true as well
+
 <<pkg-updated.go: check>>=
 func Check() {
 	var ret int;
@@ -1677,18 +1679,31 @@ func Check() {
 		*config.Param_ConfigFile = config_file;
 	}
 
-/*	Need to check the requirements and dependencies between:
-	If reporting is enabled, reportdb must exist
-		If report is disabled, reportdb check does not need to be run and also not log to DB
-	If enablerollback is true, the archive option must true as well
-*/
-
 	ret = FileExists(*config.Param_ConfigFile);
 	if (ret != 0) {
 		Logging(LOG_FATAL2, "check", fmt.Sprintf("Could not read config file: %s", *config.Param_ConfigFile));
 	}
 
 	ReadConfig();
+
+/* does not work, because config struct needs to create new and map the new struct
+	if (len(*config.Param_ArchivePath) > 1) {
+		config.ArchivePath = *config.Param_ArchivePath;
+		Logging(LOG_DEBUG, "check", fmt.Sprintf("Set ArchivePath to: %s", config.ArchivePath));
+	}
+	if (len(*config.Param_PkgDatabaseFile) > 1) {
+		config.PkgDatabaseFile = *config.Param_PkgDatabaseFile;
+		Logging(LOG_DEBUG, "check", fmt.Sprintf("Set PkgDatabaseFile to: %s", config.PkgDatabaseFile));
+	}
+	if (len(*config.Param_DatabaseFile) > 1) {
+		config.DatabaseFile = *config.Param_DatabaseFile;
+		Logging(LOG_DEBUG, "check", fmt.Sprintf("Set DatabaseFile to: %s", config.DatabaseFile));
+	}
+	if (len(*config.Param_ReportDatabaseFile) > 1) {
+		config.ReportDatabaseFile = *config.Param_ReportDatabaseFile;
+		Logging(LOG_DEBUG, "check", fmt.Sprintf("Set ReportDatabaseFile to: %s", config.ReportDatabaseFile));
+	}
+*/
 
 	account,err := user.Current(); 
 	if (err != nil) {
@@ -1707,7 +1722,7 @@ func Check() {
 			Logging(LOG_FATAL2, "check", "Error: No sudo binary (/usr/local/bin/sudo ) found, please install sudo");
 		}
 	}
-	ret = FileExists("/var/db/pkg/local.sqlite");
+	ret = FileExists(config.PkgDatabaseFile);
 	if (ret != 0){
 		Logging(LOG_FATAL2, "check", "Error: No local pkg database exists");
 	}
@@ -1756,11 +1771,12 @@ config.Param_RestartDaemons = flag.Bool("restartdaemons", true, "Restart enable 
 config.Param_DowngradePackageOnFailedRestart = flag.Bool("enablerollback", true, "Rollback package if service restart failed, require -enablearchive true");
 config.Param_UseSudo = flag.Bool("sudo", false, "Use sudo for all commands");
 config.Param_ArchiveEnable = flag.Bool("enablearchive", true, "Create a backup package before upgrade, required for rollback");
-config.Param_ArchiveFile = flag.String("archivepath", "/var/db/pkg/pkg-updated", "In which directory should the pkg backups stored");
-config.Param_PkgDatabaseFile = flag.String("pkgdbfile", "/var/db/pkg/local.sqlite", "The local pkg database file");
-config.Param_DatabaseFile = flag.String("dbfile", "/var/db/pkg-updated/pkg-update.sqlite", "The pkg-updated database file");
-config.Param_ReportDatabaseFile = flag.String("reportdbfile", "/var/db/pkg-updated/report.sqlite", "The report database file");
+config.Param_ArchivePath = flag.String("archivepath", "", "In which directory should the pkg backups stored");
+config.Param_PkgDatabaseFile = flag.String("pkgdbfile", "", "The local pkg database file");
+config.Param_DatabaseFile = flag.String("dbfile", "", "The pkg-updated database file");
+config.Param_ReportDatabaseFile = flag.String("reportdbfile", "", "The report database file");
 */
+
 flag.Parse();
 @
 
@@ -1866,11 +1882,13 @@ Help page and print version function
 <<pkg-updated.go: helpversion>>=
 func HelpPage() {
 	fmt.Printf("pkg-updated help:\n\n");
-	fmt.Printf("Usage: pkg-updated [-help] [-debug] [-config <FILENAME>] [-runonce] [-version]\n\n");
-	fmt.Printf("-help\t\tShow this page\n");
-	fmt.Printf("-config\t\tPath to config file to use\n");
-	fmt.Printf("-debug\t\tRuns in debug mode and prints all LOG types\n");
-	fmt.Printf("-runone\t\tDisable scheduler and just run once update procedure\n");
+	fmt.Printf("Usage: pkg-updated [-option] [-option] [-option <FILENAME>] .... \n\n");
+	fmt.Printf("Options:\n--------\n");
+	fmt.Printf("-help\t\t\t\tShow this page\n");
+	fmt.Printf("-config\t\t\t\tPath to config file to use\n");
+	fmt.Printf("-debug\t\t\t\tRuns in debug mode and prints all LOG types\n");
+	fmt.Printf("-runone\t\t\t\tDisable scheduler and just run once update procedure\n");
+	fmt.Printf("-version\t\t\tShow version and exit\n");
 /*
 	fmt.Printf("-reporting\tCreate and use a report db for all events");
 	fmt.Printf("-cleardbonstart\tIf pkg-updated db is already exists, truncate all informations before sync\n");
@@ -1879,11 +1897,10 @@ func HelpPage() {
 	fmt.Printf("-enablerollback\tRollback package if service restart failed, require -enablearchive true\n");
 	fmt.Printf("-sudo\tUse sudo for all commands\n");
 	fmt.Printf("-enablearchive\tCreate a backup package before upgrade, required for rollback\n");
-	fmt.Printf("-archivepath <filename>\tIn which directory should the pkg backups stored\n");
-	fmt.Printf("-pkgdbfile <filename>\tThe local pkg database file\n");
-	fmt.Printf("-dbfile <filename>\tThe pkg-updated database file\n");
+	fmt.Printf("-archivepath <filename>\t\tIn which directory should the pkg backups stored\n");
+	fmt.Printf("-pkgdbfile <filename>\t\tThe local pkg database file\n");
+	fmt.Printf("-dbfile <filename>\t\tThe pkg-updated database file\n");
 	fmt.Printf("-reportdbfile <filename>\tThe report database file\n");
-	fmt.Printf("-version\tShow version and exit\n");
 */
 	os.Exit(0);
 }
