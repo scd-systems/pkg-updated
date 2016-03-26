@@ -11,10 +11,11 @@ PKG (aka. pkgng) is the default binary package management software for FreeBSD.
 
 Features:
 
-- Configurable scheduler for recurring times
-- Archive packages which need to upgrade (for rollback)
+- Configurable scheduler for recurring updates
+- Archive packages before upgrade (for rollback)
 - Restart services if an enabled running service was updated
-- Rollback updated packages on failed service restart (not finished)
+- Rollback updated packages on failed service restart
+- Reporting 
 
 
 How to Start
