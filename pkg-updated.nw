@@ -1797,46 +1797,58 @@ func FileExists(filename string) int {
 }
 @
 
-For running shell commands and reduce code, need a function to do all the necessary steps
+For running shell commands and reduce code, need a function to do all the necessary steps.
 
 <<pkg-updated.go: runcmd>>=
 func RunCmd(cmd string, opts... string) (string, error) {
 	var (
 		cmdName string;
 		cmdArgs []string;
-		cmdOut []byte;
-		err error;
 		cmdArg1 []string;
+		cmdTimeout time.Duration
+		err error;
 	)
-	cmdName = "pkg";
+	cmdStdOut := &bytes.Buffer{}
+	cmdStdErr := &bytes.Buffer{}
 
+	cmdName = "pkg";
 	switch cmd {
 		case "install":
 			cmdArg1 = []string{"install", "-y", "-f"};
+			cmdTimeout = (30*time.Second)
 		case "update":
 			cmdArg1 = []string{"update", "-f"};
+			cmdTimeout = (60*time.Second)
 		case "lock":
 			cmdArg1 = []string{"lock", "-y"};
+			cmdTimeout = (10*time.Second)
 		case "unlock":
 			cmdArg1 = []string{"unlock", "-y"};
+			cmdTimeout = (10*time.Second)
 		case "upgrade":
 			cmdArg1 = []string{"upgrade", "-y"};
+			cmdTimeout = (300*time.Second)
 		case "create":
 			cmdArg1 = []string{"create", "-o"};			
+			cmdTimeout = (120*time.Second)
 		case "version":
 			cmdArg1 = []string{"version", "-Rov"}
+			cmdTimeout = (60*time.Second)
 		case "which":
 			cmdArg1 = []string{"which", "-qo"}
+			cmdTimeout = (10*time.Second)
 		case "sleep":
 			_, err = exec.Command("sleep", opts[0]).CombinedOutput(); 
 			return "wakeup", err; 
 		case "service":
 			cmdName = "service";
 			cmdArg1 = []string{"-e"};
+			cmdTimeout = (30*time.Second)
 		case "service_restart":
 			cmdName = opts[0];
 			opts[0] = "";
 			cmdArg1 = []string{"restart"};
+			cmdTimeout = (30*time.Second)
 	}
 	
 	if (config.UseSudo == true) {
@@ -1857,11 +1869,33 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		cmdline.WriteString(" ")
 		cmdline.WriteString(value)
 	}
-	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("cmd: %s", cmdline.String()));
+	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s", cmdline.String()));
 
-	cmdOut, err = exec.Command(cmdName, cmdArgs...).CombinedOutput(); 
+	cmdExec := exec.Command(cmdName, cmdArgs...);
+	cmdExec.Stdout = cmdStdOut
+	cmdExec.Stderr = cmdStdErr
 
-	return string(cmdOut), err;
+	if err = cmdExec.Start(); err != nil {
+		Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Error on start: %s", err));
+	}
+
+	// cmd timeout function, need to kill after timeout reached
+	go func(){
+		time.Sleep(cmdTimeout)
+		inerr := cmdExec.Process.Kill()
+		if inerr != nil {
+			Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic: %s", err));
+		}
+		Logging(LOG_DEBUG, "runcmd", "Killed running command, timeout reached");
+	}()
+	err = cmdExec.Wait()
+
+	Logging(LOG_STDOUT, "runcmd", fmt.Sprintf("StdOut [%s]: %s", cmdline.String(), cmdStdOut.String()));
+	if (cmdStdErr.Len() > 0) {
+		Logging(LOG_STDERR, "runcmd", fmt.Sprintf("StdErr [%s]: %s", cmdline.String(), cmdStdErr.String()));
+	}
+
+	return cmdStdOut.String(), err;
 }
 @
 
