@@ -191,18 +191,18 @@ var config struct {
 	StrictRecurTime bool `json:"schedule-in-time"`
 	ExcludePackages []string `json:"exclude-packages"`
 	RecurDays[]int `json:"schedule-days"`
-    CreateReport bool `json:"create-report"`
+	CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
-    DoFreebsdUpdate	bool `json:"do-freebsd-update"`
-    RestartDaemons bool	`json:"restart-daemons"`
-    DowngradePackageOnFailedRestart	bool `json:"downgrade-package-on-failed-restart"`
+	DoFreebsdUpdate	bool `json:"do-freebsd-update"`
+	RestartDaemons bool	`json:"restart-daemons"`
+	DowngradePackageOnFailedRestart	bool `json:"downgrade-package-on-failed-restart"`
 	UseSudo bool `json:"use-sudo"`
 	ArchiveEnable bool `json:"pkg-archive-enable"`
-    ArchivePath string `json:"pkg-archive-directory"`
-    PkgDatabaseFile string `json:"pkg-database-file"`
-    DatabaseFile string `json:"database-file"`
-    ReportDatabaseFile string `json:"report-database-file"`
-    Param_DebugMode *bool;
+	ArchivePath string `json:"pkg-archive-directory"`
+	PkgDatabaseFile string `json:"pkg-database-file"`
+	DatabaseFile string `json:"database-file"`
+	ReportDatabaseFile string `json:"report-database-file"`
+	Param_DebugMode *bool;
 	Param_RunOnce *bool;
 	Param_ConfigFile *string;
 	Param_Help *bool;
@@ -220,7 +220,7 @@ var config struct {
 	Param_PkgDatabaseFile *string;
 	Param_DatabaseFile *string;
 	Param_ReportDatabaseFile *string;
-    FileExistsNoLog bool;
+	FileExistsNoLog bool;
 };
 @
 
@@ -412,15 +412,20 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 
 	if (len(opts) > 0) {
 		if (len(opts) < 2) {
+			Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM %s WHERE name = %s", field, opts[0], pkgname));
 			stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE name = ?");
+			
 		} else {
+			Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM %s WHERE %s = %s", field, opts[0], opts[1], pkgname));
 			stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE "+ opts[1] +" = ?");
 		}
 	} else {
+		Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM packages WHERE name = %s", field, pkgname));
 		stmt, err = db.Prepare("SELECT "+field+" FROM packages WHERE name = ?");
 	}
+
 	if err != nil {
-		log.Fatal(err);
+		Logging(LOG_FATAL, "getpackageinfo", fmt.Sprintf("Error: %v", err));
 		return result,fmt.Errorf("%s", err);
 	}
 
@@ -432,8 +437,10 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 		result = "NULL";
 		return result, nil;
 	}
+	Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query result: %s", result));
+
 	if err != nil {
-		log.Fatal(err);
+		Logging(LOG_ERROR, "getpackageinfo", fmt.Sprintf("Error: %v", err));
 		return result,fmt.Errorf("%s", err);
 	}
 
@@ -447,18 +454,21 @@ The [[AddPackage]] function store pkg related informations to the database [[pkg
 func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {	
 	tx, err := db.Begin();
 	if err != nil {
-		log.Fatal(err);
+		Logging(LOG_FATAL, "addpackage", fmt.Sprintf("Error: %v", err));
 	}
 	stmt, err := tx.Prepare("insert into packages(name, origin, version, status) values(?, ?, ?, ?)");
+
+	Logging(LOG_DEBUG, "addpackage", fmt.Sprintf("sql query: INSERT INTO packages (name,origin,version,status) value (%s, %s, %s, %s)", name, origin, version, status));
+
 	if err != nil {
-		log.Fatal(err);
+		Logging(LOG_ERROR, "addpackage", fmt.Sprintf("Error: %v", err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(name, origin, version, status);
 
 	if err != nil {
-		log.Fatal(err);
+		Logging(LOG_ERROR, "addpackage", fmt.Sprintf("Error: %v", err));
 		return -1;
 	}
 	tx.Commit();
@@ -475,7 +485,7 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 	
 	tx, err := db.Begin();
 	if err != nil {
-		Logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
+		Logging(LOG_FATAL, "updatepackage", fmt.Sprint(err));
 	}
 
 	if len(opts) > 0 {
@@ -488,13 +498,13 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 	
 	stmt, err := tx.Prepare(query);
 	if err != nil {
-		Logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
+		Logging(LOG_ERROR, "updatepackage", fmt.Sprintf("Error: %v", err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(set_value, where_value);
 	if err != nil {
-		Logging(LOG_ERROR, "updatepackage", fmt.Sprint(err));
+		Logging(LOG_ERROR, "updatepackage", fmt.Sprintf("Error: %v", err));
 		return -1;
 	}
 	tx.Commit();
@@ -518,13 +528,15 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 		Logging(LOG_ERROR, "getallpackages", fmt.Sprint(err));
 		return result, err;
 	} else if(len(opts) >= 2) {
+		Logging(LOG_DEBUG, "getallpackages", fmt.Sprintf("sql query: SELECT %s FROM %s", opts[0], opts[1]));
 		rows, err = db.Query("SELECT "+ opts[0] +" FROM "+ opts[1]);	
 	} else { 	
+		Logging(LOG_DEBUG, "getallpackages", fmt.Sprintf("sql query: SELECT name FROM packages"));
 		rows, err = db.Query("SELECT name FROM packages");
 	}
 	
 	if err != nil {
-		Logging(LOG_ERROR, "getallpackages", fmt.Sprint(err));
+		Logging(LOG_ERROR, "getallpackages", fmt.Sprintf("Error: %v", err));
 	}
 	defer rows.Close();
 	
@@ -555,18 +567,19 @@ Need enable as parameter as soon as enabled service detection is ready and worki
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {	
 	tx, err := db.Begin();
 	if err != nil {
-		Logging(LOG_ERROR, "addservice", fmt.Sprint(err));
+		Logging(LOG_ERROR, "addservice", fmt.Sprintf("Error: %v", err));
 	}
+	Logging(LOG_DEBUG, "addservice", fmt.Sprintf("sql query: INSERT INTO services (name,svccmd,enabled) VALUES (%s,%s,%s)", name, svccmd, enabled));
 	stmt, err := tx.Prepare("insert into services (name, svccmd, enabled) values (?, ?, ?)");
 	if err != nil {
-		Logging(LOG_ERROR, "addservice", fmt.Sprint(err));
+		Logging(LOG_ERROR, "addservice", fmt.Sprintf("Error: %v", err));
 		return -1;
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(name, svccmd, enabled);
 	
 	if err != nil {
-		Logging(LOG_ERROR, "addservice", fmt.Sprint(err));	
+		Logging(LOG_ERROR, "addservice", fmt.Sprintf("Error: %v", err));	
 		return -1;
 	}
 	tx.Commit();
@@ -849,12 +862,16 @@ func CheckUpdates(db *sql.DB) bool {
 \newpage
 \subsection{The update routine}
 
-The [[UpdateRoutine]] handle the workflow for the update the packages.
+The [[UpdateRoutine]] handle the work-flow for the update the packages.
 If the scheduled time match against current time informations, the update procedure needs to run.
 At first, the pkg-updated database needs to be synced with all existing packages from local exist packages.
 After syncing, all configured excluded packages needs to be locked.
 In the next step, all current configured enabled services needs to be detected.
-If this preperations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
+If this preparations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
+
+<<TODO>>=
+// 20160330: UpdateRoutine: Only restart services with affected updates were done. Currently all enabled services will restart after updates
+@
 
 <<pkg-updated.go: updateroutine>>=
 func UpdateRoutine(db *sql.DB) (bool) {
@@ -884,8 +901,8 @@ func UpdateRoutine(db *sql.DB) (bool) {
 		}
 
 		if (config.RestartDaemons == true) {
-			svc, err := RestartEnabledServices(db);
-			if (err != nil) {
+			svc := RestartEnabledServices(db);
+			if (len(svc) > 0) {
 				Logging(LOG_EVENT, "updateroutine", "Service restart failed");
 				if (config.DowngradePackageOnFailedRestart == true) {
 					Logging(LOG_EVENT, "updateroutine", "Starting rollback");
@@ -1471,7 +1488,7 @@ func ScanScript(path string, preout string) (int, string, error) {
 Server restart function.
 
 <<pkg-updated.go: services>>=
-func RestartService(svc string) (int, error) {
+func RestartService(svc string) (int) {
 	var (
 		ret int;
 	)
@@ -1480,15 +1497,15 @@ func RestartService(svc string) (int, error) {
 		Logging(LOG_ERROR, "restartservice", fmt.Sprintf("Service: Could not restart: %s | cmdOut: %v", svc, cmdOut));
 		ret = 1;
 	}
-	return ret, err;
+	return ret;
 }
 @
 
 The restart of service function will run if [[Upgrade]] is done and enabled services configured to restart.
-All enabled services will restarted and failed restartes will return the affected package name.
+All enabled services will restarted and failed restarts will return in a list of package names.
 
 <<pkg-updated.go: services>>=
-func RestartEnabledServices(db *sql.DB) ([]string, error){
+func RestartEnabledServices(db *sql.DB) ([]string){
 	var (
 		ret int;		
 		err error;
@@ -1510,14 +1527,15 @@ func RestartEnabledServices(db *sql.DB) ([]string, error){
 		}
 		if (enabled == "1") {
 			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value));
-			ret, err = RestartService(value);
+			ret = RestartService(value);
 			if (ret != 0) {
+				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put service on rollback list: %s", value));
+				svc, err = GetPackageInfo(db, "name", value, "services", "svccmd");				
 				tmplist = make([]string, len(pkglist)+1)
 				copy(tmplist, pkglist)
 				pkglist = tmplist
 				pkglist[len(pkglist)-1] = svc;
 			}
-
 		}
 	}
 	return pkglist, err;
@@ -1642,7 +1660,7 @@ The first approach would be to have a report for the current day and the current
 Later on, the user can define the the day or the time range for building a report out of it.
 
 
-
+// continue 0.3.3 (report client)
 
 <<pkg-updated-report.go: main>>=
 func main(){
