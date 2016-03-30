@@ -889,6 +889,8 @@ func UpdateRoutine(db *sql.DB) (bool) {
 				Logging(LOG_EVENT, "updateroutine", "Service restart failed");
 				if (config.DowngradePackageOnFailedRestart == true) {
 					Logging(LOG_EVENT, "updateroutine", "Starting rollback");
+
+					//iterate through the list of failed restarts
 					for _, pkgname := range svc {
 						RollbackPackage(db, pkgname);
 					}
@@ -993,6 +995,7 @@ func SavePackages(db *sql.DB){
 @
 <<pkg-updated.go: update>>=
 //			if err != nil {
+				Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg));
 				UpdatePackage(db, "archivepath", path, "origin", origin)
 //				UpdatePackage(db, origin, "archive", path)
 //			}		
@@ -1512,8 +1515,9 @@ func RestartEnabledServices(db *sql.DB) ([]string, error){
 				tmplist = make([]string, len(pkglist)+1)
 				copy(tmplist, pkglist)
 				pkglist = tmplist
-				pkglist[len(pkglist)] = svc;
+				pkglist[len(pkglist)-1] = svc;
 			}
+
 		}
 	}
 	return pkglist, err;
@@ -1632,9 +1636,24 @@ The idea to create a report like with three importent informats.
 2) Does rollbacks or other unexpected events occurs 
 3) Are the system is uptodate or action are needed ?
 
+
+How the report should be created.
+The first approach would be to have a report for the current day and the current week.
+Later on, the user can define the the day or the time range for building a report out of it.
+
+
+
+
 <<pkg-updated-report.go: main>>=
 func main(){
 	// report-db-client MAIN
+}
+@
+
+
+End of Main of pkg-updated-report
+
+<<pkg-updated-report.go: main>>=
 }
 @
 
