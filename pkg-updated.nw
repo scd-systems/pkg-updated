@@ -874,6 +874,10 @@ func UpdateRoutine(db *sql.DB) (bool) {
 	var (
 		ret bool;
 		updates_available bool;
+		rollback_status bool;
+		restart_status int;
+		service string;
+		err error;
 	)
 	
 	Logging(LOG_EVENT, "updateroutine", "Start update routine");
@@ -905,7 +909,19 @@ func UpdateRoutine(db *sql.DB) (bool) {
 
 					//iterate through the list of failed restarts
 					for _, pkgname := range svc {
-						RollbackPackage(db, pkgname);
+						rollback_status = RollbackPackage(db, pkgname);
+						if (rollback_status == true){
+							service, err = GetPackageInfo(db, "svccmd", pkgname, "services", "name");						
+							if (err != nil) {
+								Logging(LOG_ERROR, "updateroutine", fmt.Sprintf("Error, could not found service command from package: %s", pkgname))
+								continue;							
+							}					
+							Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Rollback of pkg [%s] succeed, restart service again: %s", pkgname, service));
+							restart_status = RestartService(service);
+							if (restart_status != 0) {
+								Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Restart of service [%s] failed again, please take manual actions to recover", service));
+							}
+						}
 					}
 				}	
 			}
@@ -1051,11 +1067,12 @@ Problems with sync and clear DB:
 Downgrade failed updates, needed for late usage
 
 <<pkg-updated.go: rollback>>=
-func RollbackPackage(db *sql.DB, name string){
+func RollbackPackage(db *sql.DB, name string) bool{
 	var (
 		path string;
 		cmdOut string;
-		err error;		
+		err error;
+		ret bool;
 	)
 	
 	if path, err = GetPackageInfo(db, "archivepath", name); err != nil {
@@ -1064,9 +1081,9 @@ func RollbackPackage(db *sql.DB, name string){
 	
 	if (path == "NULL") {
 		Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback Error: No rollback pkg available for package %s", name));
-		return;
+		return ret;
 	}
-	Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s , pkg: %s",name, path))
+	Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s, pkg file: %s",name, path))
 		
 	if cmdOut, err = RunCmd("install", path); err != nil {	
 		Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Install error: %s", err));
@@ -1078,7 +1095,9 @@ func RollbackPackage(db *sql.DB, name string){
 	}
 	*/
 	Logging(LOG_DEBUG, "rollbackpackage", fmt.Sprintf("Output: %s", string(cmdOut)))
-	return;
+
+	ret = true;	
+	return ret;
 }
 @
 
@@ -1922,7 +1941,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		cmdline.WriteString(" ")
 		cmdline.WriteString(value)
 	}
-	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s", cmdline.String()));
+	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s | cmd timeout: %v", cmdline.String(), cmdTimeout));
 
 	cmdExec := exec.Command(cmdName, cmdArgs...);
 	cmdExec.Stdout = cmdStdOut
@@ -1937,7 +1956,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		time.Sleep(cmdTimeout)
 		inerr := cmdExec.Process.Kill()
 		if inerr != nil {
-			Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic: %s", err));
+			Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic in cmd process timeout kill: %v", err));
 		}
 		Logging(LOG_DEBUG, "runcmd", "Killed running command, timeout reached");
 	}()
@@ -1968,7 +1987,7 @@ func HelpPage() {
 	fmt.Printf("Usage: pkg-updated [-option] [-option] ... [-option <FILENAME>] ... \n\n");
 	fmt.Printf("Options:\n--------\n");
 	fmt.Printf("-help\t\t\t\tShow this page\n");
-	fmt.Printf("-config <FILENAME>\t\t\t\tPath to config file to use\n");
+	fmt.Printf("-config <FILENAME>\t\tPath to config file to use\n");
 	fmt.Printf("-debug\t\t\t\tRuns in debug mode and prints all LOG types\n");
 	fmt.Printf("-runone\t\t\t\tDisable scheduler and just run once update procedure\n");
 	fmt.Printf("-version\t\t\tShow version and exit\n");
