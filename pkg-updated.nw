@@ -9,7 +9,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=3
-	PATCH_VERSION=2
+	PATCH_VERSION=3
 )
 @
 
@@ -813,7 +813,7 @@ The commands to run are: [[pkg version]]
 
 We extract all available updates from pkg version command and update this information inside the DB.
 For the extraction, we parse the whole output from the exec command.
-If fund a package with a never version, set return status to true
+If fund a package with a never version, set return status to true and change the pkg status to "update-available"
 
 <<pkg-updated.go: check-updates>>=
 func CheckUpdates(db *sql.DB) bool {
@@ -869,10 +869,6 @@ After syncing, all configured excluded packages needs to be locked.
 In the next step, all current configured enabled services needs to be detected.
 If this preparations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
 
-<<TODO>>=
-// 20160330: UpdateRoutine: Only restart services with affected updates were done. Currently all enabled services will restart after updates
-@
-
 <<pkg-updated.go: updateroutine>>=
 func UpdateRoutine(db *sql.DB) (bool) {
 	var (
@@ -899,7 +895,7 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			Logging(LOG_EVENT, "updateroutine", "Pkg Upgrade failed");
 			return ret;
 		}
-
+		
 		if (config.RestartDaemons == true) {
 			svc := RestartEnabledServices(db);
 			if (len(svc) > 0) {
@@ -1024,8 +1020,8 @@ func SavePackages(db *sql.DB){
 @
 
 
-2. Start Update and analyze output
-The upgrade process it self is quiet simple a runcmd step only
+2. Start Update and analyse output
+The upgrade process it self is quiet simple (one runcmd step only)
 
 <<pkg-updated.go: update>>=
 func Upgrade() int {
@@ -1503,6 +1499,7 @@ func RestartService(svc string) (int) {
 
 The restart of service function will run if [[Upgrade]] is done and enabled services configured to restart.
 All enabled services will restarted and failed restarts will return in a list of package names.
+A service will also only restarted, if the pkg status is update-available, because in this case, the Upgrade was successfully done in [[UpdateRoutine]] function before.
 
 <<pkg-updated.go: services>>=
 func RestartEnabledServices(db *sql.DB) ([]string){
@@ -1513,6 +1510,8 @@ func RestartEnabledServices(db *sql.DB) ([]string){
 		tmplist []string;
 		svc string;
 		enabled string;
+		pkgname string;
+		pkgstatus string;
 	)
 	
 	svccmd, err := GetAllPackages(db, "svccmd", "services")
@@ -1526,19 +1525,35 @@ func RestartEnabledServices(db *sql.DB) ([]string){
 			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service enable status: %s", value));		
 		}
 		if (enabled == "1") {
-			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value));
-			ret = RestartService(value);
-			if (ret != 0) {
-				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put service on rollback list: %s", value));
-				svc, err = GetPackageInfo(db, "name", value, "services", "svccmd");				
-				tmplist = make([]string, len(pkglist)+1)
-				copy(tmplist, pkglist)
-				pkglist = tmplist
-				pkglist[len(pkglist)-1] = svc;
+			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Service is enabled: %s", value));
+	
+			pkgname, err = GetPackageInfo(db, "name", value, "services", "svccmd");
+			if (err != nil) {
+				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value));		
+				continue;
 			}
+
+			pkgstatus, err = GetPackageInfo(db, "status", pkgname, "packages", "name") 
+			if (err != nil) {
+				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get update status from service: %s", value));		
+				continue;
+			}
+			
+			if (pkgstatus == "update-available") {
+				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value));
+				ret = RestartService(value);
+				if (ret != 0) {
+					Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put service on rollback list: %s", value));
+					svc, err = GetPackageInfo(db, "name", value, "services", "svccmd");				
+					tmplist = make([]string, len(pkglist)+1)
+					copy(tmplist, pkglist)
+					pkglist = tmplist
+					pkglist[len(pkglist)-1] = svc;
+				}		
+			}		
 		}
 	}
-	return pkglist, err;
+	return pkglist;
 }
 @
 
@@ -1950,10 +1965,10 @@ Help page and print version function
 <<pkg-updated.go: helpversion>>=
 func HelpPage() {
 	fmt.Printf("pkg-updated help:\n\n");
-	fmt.Printf("Usage: pkg-updated [-option] [-option] [-option <FILENAME>] .... \n\n");
+	fmt.Printf("Usage: pkg-updated [-option] [-option] ... [-option <FILENAME>] ... \n\n");
 	fmt.Printf("Options:\n--------\n");
 	fmt.Printf("-help\t\t\t\tShow this page\n");
-	fmt.Printf("-config\t\t\t\tPath to config file to use\n");
+	fmt.Printf("-config <FILENAME>\t\t\t\tPath to config file to use\n");
 	fmt.Printf("-debug\t\t\t\tRuns in debug mode and prints all LOG types\n");
 	fmt.Printf("-runone\t\t\t\tDisable scheduler and just run once update procedure\n");
 	fmt.Printf("-version\t\t\tShow version and exit\n");

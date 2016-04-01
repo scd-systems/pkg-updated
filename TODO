@@ -24,13 +24,12 @@ Ideas:
         - Version 0.8: Bugfix / Cleanup documentation
         - Version 0.9: automate schema upgrade if new schema available
         - Version 0.9: Bugfix / Cleanup documentation
+        - Version 0.9: Jail support
         - Version 1.0: Stable Release
-        - Version 1.0: Jail support
         - Version 2.0: Update Server which collects all reports and coordinate updates
         - Version 2.0: Desktop: Panel tool for display successful updates
 
 Bugs:
-        - If db exists but is empty, the synctodb must run at first (disabled currently)
         - SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
         - wrong usage of Slices, read again:
         http://blog.golang.org/go-slices-usage-and-internals
