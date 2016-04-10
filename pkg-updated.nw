@@ -9,7 +9,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=3
-	PATCH_VERSION=3
+	PATCH_VERSION=4
 )
 @
 
@@ -39,12 +39,13 @@ Ideas:
 	- Version 0.5: Port without using gmake
 	- [/] Version 0.5: rc.d script
 	- Version 0.5: Add Output from updated pkg messages to reportdb
-	- Version 0.5: Syslog/Logfile
+	- [/] Version 0.5: Syslog/Logfile
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: FreeBSD Port and SelfUpdate routine
 	- Version 0.8: Bugfix / Cleanup documentation
 	- Version 0.9: automate schema upgrade if new schema available
+	- Version 0.9: Sort / Ordered service restart option
 	- Version 0.9: Bugfix / Cleanup documentation
 	- Version 0.9: Jail support
 	- Version 1.0: Stable Release
@@ -52,9 +53,9 @@ Ideas:
 	- Version 2.0: Desktop: Panel tool for display successful updates
 
 Bugs:
-	- SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
-	- wrong usage of Slices, read again:
-	http://blog.golang.org/go-slices-usage-and-internals
+	- Need to fix RunCmd and timeout
+	- Update status is not updated in syncpkgdb
+
 @
 
 \newpage
@@ -66,6 +67,14 @@ Reports of the pkg upgrade progress will be created if parameter is set true (Bo
 
 <<pkg-updated.conf>>=
 {
+@
+
+Enable or disable usage of syslog.
+Define the syslog priority (same names as freebsd syslog)
+
+<<pkg-updated.conf>>=
+	"syslog-enable": true,
+	"syslog-priority": "LOG_NOTICE",
 @
 
 On which time the scheduler should run.
@@ -202,6 +211,8 @@ var config struct {
 	PkgDatabaseFile string `json:"pkg-database-file"`
 	DatabaseFile string `json:"database-file"`
 	ReportDatabaseFile string `json:"report-database-file"`
+	UseSyslog bool `json:"syslog-enable"`
+	SyslogPriority string `json:"syslog-priority"`
 	Param_DebugMode *bool;
 	Param_RunOnce *bool;
 	Param_ConfigFile *string;
@@ -866,8 +877,9 @@ The [[UpdateRoutine]] handle the work-flow for the update the packages.
 If the scheduled time match against current time informations, the update procedure needs to run.
 At first, the pkg-updated database needs to be synced with all existing packages from local exist packages.
 After syncing, all configured excluded packages needs to be locked.
-In the next step, all current configured enabled services needs to be detected.
-If this preparations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated.
+In the next step, all current configured enabled services needs to be detected, for restarting if restart services is enabled.
+If this preparations are done, the [[Upgrade]] function will call and afterwards all enabled services needs to be restarted if affected packages were updated. The required services which needs to restart are taken from the information about the pkg status of 'update-available'.
+The [[Upgrade]] function it self, do not parse the output from cmd it self to recognize which packages where successfully updated.
 
 <<pkg-updated.go: updateroutine>>=
 func UpdateRoutine(db *sql.DB) (bool) {
@@ -877,38 +889,50 @@ func UpdateRoutine(db *sql.DB) (bool) {
 		rollback_status bool;
 		restart_status int;
 		service string;
+		updated_pkgs []string;
 		err error;
 	)
 	
-	Logging(LOG_EVENT, "updateroutine", "Start update routine");
+	Logging(LOG_EVENT, "updateroutine", "Start with sync the databases");
 	SyncPkgDatabases(db);
 
+	Logging(LOG_EVENT, "updateroutine", "Check for Updates");
 	updates_available = CheckUpdates(db);
 
 	if (updates_available == true) {
 		Logging(LOG_EVENT, "updateroutine", "Updates available");
 
 		if config.ArchiveEnable {
-			Logging(LOG_EVENT, "updateroutine", "Save package");
+			Logging(LOG_EVENT, "updateroutine", "Archive packages");
 			SavePackages(db);
 		}
 		<<pkg-updated.go: lockexclude>>
+
+		Logging(LOG_EVENT, "updateroutine", "Scan enabled Services");
 		ScanEnabledServices(db)
 
+		Logging(LOG_EVENT, "updateroutine", "Start pkg Upgrade");
 		if Upgrade() != 0 {
-			Logging(LOG_EVENT, "updateroutine", "Pkg Upgrade failed");
+			Logging(LOG_EVENT, "updateroutine", "The pkg Upgrade failed.");
 			return ret;
+		}
+
+		// Check updated packages and return the list		
+		Logging(LOG_EVENT, "updateroutine", "Get list of successful updated packages");
+		updated_pkgs, err = GetUpdatedPkgList(db);		
+		if (err != nil) {
+			Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Error: %s", err));		
 		}
 		
 		if (config.RestartDaemons == true) {
-			svc := RestartEnabledServices(db);
-			if (len(svc) > 0) {
+			failedpkglist := RestartEnabledServices(db, updated_pkgs);
+			if (len(failedpkglist) > 0) {
 				Logging(LOG_EVENT, "updateroutine", "Service restart failed");
 				if (config.DowngradePackageOnFailedRestart == true) {
 					Logging(LOG_EVENT, "updateroutine", "Starting rollback");
 
 					//iterate through the list of failed restarts
-					for _, pkgname := range svc {
+					for _, pkgname := range failedpkglist {
 						rollback_status = RollbackPackage(db, pkgname);
 						if (rollback_status == true){
 							service, err = GetPackageInfo(db, "svccmd", pkgname, "services", "name");						
@@ -930,14 +954,6 @@ func UpdateRoutine(db *sql.DB) (bool) {
 	} else {
 		Logging(LOG_EVENT, "updateroutine", "No updates available");
 	}
-	/* Second RUN
-		Need to verify how it behaves
-			
-		if config.ClearSyncDatabaseEnabled == true {
-			config.ClearSyncDatabaseEnabled = false
-		}
-		SyncPkgDatabases(db)		
-	*/
 			
 	ret = true;
 	return ret;
@@ -1057,6 +1073,100 @@ func Upgrade() int {
 }
 @
 
+Need a function to check which packages where successfully upgraded and return a list.
+The idea is to check the differences from SyncPkgDB and the changes after Upgrade Process.
+So in detail, the pkg version command is running again after pkg upgrade and verify the list of available updates.
+Both lists will compare and so we know which packages where upgraded or not.
+The list of pkg status changes (from update-available to up-to-date) will be return as string slice with all pkg names.
+
+<<pkg-updated.go: update>>=
+func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
+	var (
+		OldList []string;
+		CurrentList []string;
+		NewList []string;
+		err error;
+		pkgname string;
+		tmp []string;
+		index int;
+		found string;
+		OldPkgVersion string;
+		NewPkgVersion string;
+	)
+	
+	OldList, err = GetUpdateList(db);
+	if (err != nil) {
+		Logging(LOG_DEBUG, "getupdatepkglist", fmt.Sprintf("Error: %s", err));	
+	}
+
+	if (CheckUpdates(db) == true) {
+	
+		CurrentList, err = GetUpdateList(db);
+		if (len(CurrentList) == 0) {
+			err = errors.New("Updates available, but not returned from GetUpdateList()");			
+			Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error: %s", err));
+			return NewList, err;		
+		}
+
+		// Check updated pkgname with pkgname before update
+		index = 0;
+		for _, pkgname = range CurrentList {	
+
+			// Search pkgname from currentlist in oldlist
+			for _, prepkgname := range OldList {
+				if (pkgname == prepkgname){
+					found = prepkgname;
+					break;
+				}				
+			}
+			if (len(found) > 0){
+				OldPkgVersion, err = GetPackageInfo(db, "version", found, "packages", "name")
+				if (err != nil){
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error OldPkgVersion: %s", err));
+					break;	
+				}
+				NewPkgVersion, err = GetPackageInfo(db, "version", pkgname, "packages", "name")
+				if (err != nil){
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error NewPkgVersion: %s", err));
+					break;	
+				}
+
+				if (OldPkgVersion == "ENOEXIST") {
+					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("No Pkg version information available for: %s", found));
+					break;
+				}
+				if (NewPkgVersion == "ENOEXIST") {
+					Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package install failed: %s", pkgname));
+					break;
+				}
+				if (OldPkgVersion == NewPkgVersion){
+					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Update failed for pkg: %s", pkgname));
+					break;			
+				}			
+
+				tmp = make([]string, len(NewList)+1);
+				copy(tmp, NewList);
+				tmp[index] = pkgname;
+				NewList = tmp;
+				Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s", pkgname));
+			} else {
+					Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package installed: %s", pkgname));
+			}
+			index++;
+			found = "";
+		}
+	} else {
+		Logging(LOG_DEBUG, "getupdatepkglist", "All packages were successfully updated");
+		NewList = make([]string, len(OldList));
+		for index, pkgname = range OldList {
+			Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s", pkgname));			
+			NewList[index] = pkgname;
+		}
+	}
+	return NewList, err;
+}
+@
+
 After upgrade let sync the database again, questions are:
 
 Do we need to sync from fresh ? (check needed)
@@ -1104,7 +1214,6 @@ func RollbackPackage(db *sql.DB, name string) bool{
 <<TODO>>=
 // 20160201: Implement error handling
 @
-
 
 \subsubsection{Exclude packages from update process}
 
@@ -1518,61 +1627,65 @@ func RestartService(svc string) (int) {
 
 The restart of service function will run if [[Upgrade]] is done and enabled services configured to restart.
 All enabled services will restarted and failed restarts will return in a list of package names.
-A service will also only restarted, if the pkg status is update-available, because in this case, the Upgrade was successfully done in [[UpdateRoutine]] function before.
+A service will also only restarted, if the pkg are in the list from [[GetUpdatedPkgList]].
 
 <<pkg-updated.go: services>>=
-func RestartEnabledServices(db *sql.DB) ([]string){
+func RestartEnabledServices(db *sql.DB, pkglist []string) ([]string){
 	var (
 		ret int;		
 		err error;
-		pkglist []string;
+		failpkglist []string;
 		tmplist []string;
-		svc string;
-		enabled string;
+		svccmd []string;
 		pkgname string;
-		pkgstatus string;
 	)
 	
-	svccmd, err := GetAllPackages(db, "svccmd", "services")
-	if (err != nil) {
-		Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service list: %s", err));
-	}	
-	
-	for _, value := range svccmd {
-		enabled, err = GetPackageInfo(db, "enabled", value, "services", "svccmd")
-		if (err != nil) {
-			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service enable status: %s", value));		
-		}
-		if (enabled == "1") {
-			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Service is enabled: %s", value));
-	
-			pkgname, err = GetPackageInfo(db, "name", value, "services", "svccmd");
-			if (err != nil) {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value));		
-				continue;
-			}
+	if(len(pkglist) > 0) {
+		Logging(LOG_ERROR, "restartenableservices", "Iterate over all enabled services");
 
-			pkgstatus, err = GetPackageInfo(db, "status", pkgname, "packages", "name") 
+		svccmd, err = GetAllPackages(db, "svccmd", "services WHERE enabled=1")
+		if (err != nil) {
+			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service list: %s", err));
+			return failpkglist;
+		}
+		if(len(svccmd) == 0){
+			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("No enabled services found: %s", svccmd));
+			return failpkglist;		
+		}
+
+		for _, value1 := range svccmd {
+			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Search pkgname for svccmd: %s", value1));
+			pkgname, err = GetPackageInfo(db, "name", value1, "services", "svccmd");
+			if (pkgname == "ENOEXIST") {
+				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("No pkg name for service found: %s", value1));		
+				continue;			
+			}		
 			if (err != nil) {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get update status from service: %s", value));		
+				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value1));		
 				continue;
 			}
-			
-			if (pkgstatus == "update-available") {
-				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value));
-				ret = RestartService(value);
-				if (ret != 0) {
-					Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put service on rollback list: %s", value));
-					svc, err = GetPackageInfo(db, "name", value, "services", "svccmd");				
-					tmplist = make([]string, len(pkglist)+1)
-					copy(tmplist, pkglist)
-					pkglist = tmplist
-					pkglist[len(pkglist)-1] = svc;
-				}		
-			}		
+			for _, value2 := range pkglist {
+				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Iterate pkglist: %s", value2));
+
+				if(pkgname == value2) {
+					Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value1));
+					ret = RestartService(value1);
+					if (ret != 0) {
+						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Failed to restart: %s", value1));
+						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put pkg on rollback list: %s", pkgname));
+						tmplist = make([]string, len(failpkglist)+1)
+						copy(tmplist, failpkglist)
+						failpkglist = tmplist
+						pkglist[len(failpkglist)-1] = pkgname;
+					}
+				}
+			}
 		}
+	} else {
+		Logging(LOG_EVENT, "restartenableservices", "No packages were updated, no restart needed");		
 	}
-	return pkglist;
+
+	return failpkglist;
 }
 @
 
@@ -1604,7 +1717,6 @@ The event type [[LOG_FATAL2]] will additional exit the program after save/print 
 The logging function does print all log message to the standard out if debug mode is enabled.
 If the debug mode is not enabled, only events and fatal2 message types are printed to the standard out.
 The config.FileExistsNoLog is for avoid endles log loop if reportdb not exists and the create db function will log this error.
-
 
 <<pkg-updated.go: logging>>=
 func Logging(logtype string, facility string, msg string){
@@ -1643,6 +1755,10 @@ func Logging(logtype string, facility string, msg string){
 		}
 	}
 
+	if (config.UseSyslog == true) {
+		Syslog(config.SyslogPriority, facility, msg)
+	}
+
 	/* Need to die if fatal error happend */
 	if (die >= 1){
 		os.Exit(die);
@@ -1677,6 +1793,37 @@ func AddLogToDB(recordtime time.Time, logtype string, facility string, msg strin
 	}
 	tx.Commit();
 	return 0;
+}
+@
+
+The syslog module and function to provide output.
+
+<<pkg-updated.go: modules>>=
+"log/syslog"
+@
+
+Send the message directly to Syslog.
+
+<<pkg-updated.go: syslog>>=
+func Syslog(prio string, facility string, msg string) {
+	var priority syslog.Priority;
+	switch prio {
+		case "LOG_EMERG": priority = syslog.LOG_EMERG;
+		case "LOG_ALERT": priority = syslog.LOG_ALERT;
+		case "LOG_CRIT": priority = syslog.LOG_CRIT;
+		case "LOG_ERR": priority = syslog.LOG_ERR;
+		case "LOG_WARNING": priority = syslog.LOG_WARNING;
+		case "LOG_NOTICE": priority = syslog.LOG_NOTICE;
+		case "LOG_DEBUG": priority = syslog.LOG_DEBUG;
+		case "LOG_INFO": priority = syslog.LOG_INFO;	
+		default: priority = syslog.LOG_NOTICE;
+	}
+	syslogwriter, err := syslog.New(priority, "pkg-updated");
+	if (err != nil) {
+		Logging(LOG_FATAL2, "syslog", "Not able to send logs to syslog");
+		log.SetOutput(syslogwriter);
+	}
+	log.Print(fmt.Sprintf("[%s]: %s", facility, msg));
 }
 @
 
@@ -1876,10 +2023,10 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		cmdName string;
 		cmdArgs []string;
 		cmdArg1 []string;
-		cmdTimeout time.Duration
+		cmdTimeout string;
 		err error;
 	)
-	cmdTimeout = (60*time.Second);
+	cmdTimeout = "60";
 	cmdStdOut := &bytes.Buffer{}
 	cmdStdErr := &bytes.Buffer{}
 
@@ -1887,40 +2034,40 @@ func RunCmd(cmd string, opts... string) (string, error) {
 	switch cmd {
 		case "install":
 			cmdArg1 = []string{"install", "-y", "-f"};
-			cmdTimeout = (30*time.Second)
+			cmdTimeout = "30"
 		case "update":
 			cmdArg1 = []string{"update", "-f"};
-			cmdTimeout = (60*time.Second)
+			cmdTimeout = "60"
 		case "lock":
 			cmdArg1 = []string{"lock", "-y"};
-			cmdTimeout = (10*time.Second)
+			cmdTimeout = "10"
 		case "unlock":
 			cmdArg1 = []string{"unlock", "-y"};
-			cmdTimeout = (10*time.Second)
+			cmdTimeout = "10"
 		case "upgrade":
 			cmdArg1 = []string{"upgrade", "-y"};
-			cmdTimeout = (300*time.Second)
+			cmdTimeout = "300"
 		case "create":
 			cmdArg1 = []string{"create", "-o"};			
-			cmdTimeout = (120*time.Second)
+			cmdTimeout = "120"
 		case "version":
 			cmdArg1 = []string{"version", "-Rov"}
-			cmdTimeout = (60*time.Second)
+			cmdTimeout = "60"
 		case "which":
 			cmdArg1 = []string{"which", "-qo"}
-			cmdTimeout = (10*time.Second)
+			cmdTimeout = "10"
 		case "sleep":
 			_, err = exec.Command("sleep", opts[0]).CombinedOutput(); 
 			return "wakeup", err; 
 		case "service":
 			cmdName = "service";
 			cmdArg1 = []string{"-e"};
-			cmdTimeout = (30*time.Second)
+			cmdTimeout = "30"
 		case "service_restart":
 			cmdName = opts[0];
 			opts[0] = "";
 			cmdArg1 = []string{"restart"};
-			cmdTimeout = (30*time.Second)
+			cmdTimeout = "30"
 	}
 	
 	if (config.UseSudo == true) {
@@ -1941,7 +2088,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		cmdline.WriteString(" ")
 		cmdline.WriteString(value)
 	}
-	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s | cmd timeout: %v", cmdline.String(), cmdTimeout));
+	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s | cmd timeout: %s seconds", cmdline.String(), cmdTimeout));
 
 	cmdExec := exec.Command(cmdName, cmdArgs...);
 	cmdExec.Stdout = cmdStdOut
@@ -1952,14 +2099,17 @@ func RunCmd(cmd string, opts... string) (string, error) {
 	}
 
 	// cmd timeout function, need to kill after timeout reached
-	go func(){
-		time.Sleep(cmdTimeout)
-		inerr := cmdExec.Process.Kill()
+	go func(cmd *exec.Cmd){
+		RunCmd("sleep", cmdTimeout);
+		cmd.Process.Kill();
+		/*	The Sleep it self is a problem, if the cmdExec is done, the kill will run and end the sleep, but no error from sub kill can catched
+		inerr := cmd.Process.Kill()
 		if inerr != nil {
 			Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic in cmd process timeout kill: %v", err));
 		}
 		Logging(LOG_DEBUG, "runcmd", "Killed running command, timeout reached");
-	}()
+		*/	
+	}(cmdExec)
 	err = cmdExec.Wait()
 
 	Logging(LOG_STDOUT, "runcmd", fmt.Sprintf("StdOut [%s]: %s", cmdline.String(), cmdStdOut.String()));
@@ -2110,6 +2260,7 @@ import (
 <<pkg-updated.go: check>>
 <<pkg-updated.go: readconfig>>
 <<pkg-updated.go: sqlite-connect>>
+<<pkg-updated.go: syslog>>
 <<pkg-updated.go: logging>>
 <<pkg-updated.go: runcmd>>
 <<pkg-updated.go: chop>>
