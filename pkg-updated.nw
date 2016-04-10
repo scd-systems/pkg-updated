@@ -140,8 +140,16 @@ Enable automated update ?
 
 Should a configured daemon restarted after pkg update ?
 <<pkg-updated.conf>>=
-	"restart-daemons": true,
+	"restart-services": true,
 @
+
+Which services should be excluded if restart-daemons is enabled ?
+<<pkg-updated.conf>>=
+	"exclude-services": [
+		"/usr/local/etc/rc.d/openssh"
+	],
+@
+
 
 Should all pkg commands run with sudo ?
 <<pkg-updated.conf>>=
@@ -203,7 +211,8 @@ var config struct {
 	CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
 	DoFreebsdUpdate	bool `json:"do-freebsd-update"`
-	RestartDaemons bool	`json:"restart-daemons"`
+	RestartServices bool	`json:"restart-services"`
+	ExcludedServices []string `json:"exclude-services"`
 	DowngradePackageOnFailedRestart	bool `json:"downgrade-package-on-failed-restart"`
 	UseSudo bool `json:"use-sudo"`
 	ArchiveEnable bool `json:"pkg-archive-enable"`
@@ -924,7 +933,7 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Error: %s", err));		
 		}
 		
-		if (config.RestartDaemons == true) {
+		if (config.RestartServices == true) {
 			failedpkglist := RestartEnabledServices(db, updated_pkgs);
 			if (len(failedpkglist) > 0) {
 				Logging(LOG_EVENT, "updateroutine", "Service restart failed");
@@ -956,6 +965,8 @@ func UpdateRoutine(db *sql.DB) (bool) {
 	}
 			
 	ret = true;
+	Logging(LOG_EVENT, "updateroutine", "Update routine done");
+
 	return ret;
 }
 @
@@ -1524,7 +1535,7 @@ One problem could be appear if a pkg have more then one service script, like apa
 
 <<pkg-updated.go: services>>=
 func ScanEnabledServices(db *sql.DB){
-	if (config.RestartDaemons == true) {
+	if (config.RestartServices == true) {
 		var (
 			pkgorigin string;
 			pkgname string;	
@@ -1638,6 +1649,7 @@ func RestartEnabledServices(db *sql.DB, pkglist []string) ([]string){
 		tmplist []string;
 		svccmd []string;
 		pkgname string;
+		excluded bool;
 	)
 	
 	if(len(pkglist) > 0) {
@@ -1654,29 +1666,38 @@ func RestartEnabledServices(db *sql.DB, pkglist []string) ([]string){
 		}
 
 		for _, value1 := range svccmd {
-			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Search pkgname for svccmd: %s", value1));
-			pkgname, err = GetPackageInfo(db, "name", value1, "services", "svccmd");
-			if (pkgname == "ENOEXIST") {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("No pkg name for service found: %s", value1));		
-				continue;			
-			}		
-			if (err != nil) {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value1));		
-				continue;
-			}
-			for _, value2 := range pkglist {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Iterate pkglist: %s", value2));
+			excluded = false;
+			for _, disabledsvc := range config.ExcludedServices {
+				if (disabledsvc == value1){
+					Logging(LOG_INFO, "restartenableservices", fmt.Sprintf("Service is excluded from restart: %s", disabledsvc));
+					excluded = true;				
+				}
+			}				
+			if (excluded == false){
+				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Search pkgname for svccmd: %s", value1));
+				pkgname, err = GetPackageInfo(db, "name", value1, "services", "svccmd");
+				if (pkgname == "ENOEXIST") {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("No pkg name for service found: %s", value1));		
+					continue;			
+				}		
+				if (err != nil) {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value1));		
+					continue;
+				}
+				for _, value2 := range pkglist {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Iterate pkglist: %s", value2));			
 
-				if(pkgname == value2) {
-					Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value1));
-					ret = RestartService(value1);
-					if (ret != 0) {
-						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Failed to restart: %s", value1));
-						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put pkg on rollback list: %s", pkgname));
-						tmplist = make([]string, len(failpkglist)+1)
-						copy(tmplist, failpkglist)
-						failpkglist = tmplist
-						pkglist[len(failpkglist)-1] = pkgname;
+					if(pkgname == value2) {
+						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value1));
+						ret = RestartService(value1);
+						if (ret != 0) {
+							Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Failed to restart: %s", value1));
+							Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put pkg on rollback list: %s", pkgname));
+							tmplist = make([]string, len(failpkglist)+1)
+							copy(tmplist, failpkglist)
+							failpkglist = tmplist
+							pkglist[len(failpkglist)-1] = pkgname;
+						}
 					}
 				}
 			}

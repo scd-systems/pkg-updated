@@ -1,4 +1,4 @@
-// 2135 "pkg-updated.nw"
+// 2326 "pkg-updated.nw"
 /*
 Copyright (c) SCD-SYSTEMS.NET
 
@@ -45,49 +45,51 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// 2081 "pkg-updated.nw"
+// 2271 "pkg-updated.nw"
 package main
 
 import (
 
-	// 230 "pkg-updated.nw"
+	// 250 "pkg-updated.nw"
 	"encoding/json"
-	// 315 "pkg-updated.nw"
+	// 335 "pkg-updated.nw"
 	"fmt"
 	"os"
 	"strconv"
-	// 328 "pkg-updated.nw"
+	// 348 "pkg-updated.nw"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
-	// 810 "pkg-updated.nw"
+	// 830 "pkg-updated.nw"
 	"bytes"
 	"os/exec"
-	// 1247 "pkg-updated.nw"
+	// 1386 "pkg-updated.nw"
 	"regexp"
 	"time"
-	// 1391 "pkg-updated.nw"
+	// 1530 "pkg-updated.nw"
 	"io/ioutil"
-	// 1567 "pkg-updated.nw"
+	// 1720 "pkg-updated.nw"
 	"errors"
 	"log"
-	// 1703 "pkg-updated.nw"
+	// 1823 "pkg-updated.nw"
+	"log/syslog"
+	// 1890 "pkg-updated.nw"
 	"os/user"
-	// 1804 "pkg-updated.nw"
+	// 1991 "pkg-updated.nw"
 	"flag"
-	// 2085 "pkg-updated.nw"
+	// 2275 "pkg-updated.nw"
 )
 
 // 9 "pkg-updated.nw"
 var (
 	MAJOR_VERSION = 0
 	MINOR_VERSION = 3
-	PATCH_VERSION = 3
+	PATCH_VERSION = 4
 )
 
-// 183 "pkg-updated.nw"
+// 200 "pkg-updated.nw"
 const config_file = "/usr/local/etc/pkg-updated/pkg-updated.conf"
 
-// 189 "pkg-updated.nw"
+// 206 "pkg-updated.nw"
 var config struct {
 	RecurTime                       string   `json:"schedule"`
 	StrictRecurTime                 bool     `json:"schedule-in-time"`
@@ -96,7 +98,8 @@ var config struct {
 	CreateReport                    bool     `json:"create-report"`
 	ClearSyncDatabaseEnabled        bool     `json:"fresh-db-sync-on-start"`
 	DoFreebsdUpdate                 bool     `json:"do-freebsd-update"`
-	RestartDaemons                  bool     `json:"restart-daemons"`
+	RestartServices                 bool     `json:"restart-services"`
+	ExcludedServices                []string `json:"exclude-services"`
 	DowngradePackageOnFailedRestart bool     `json:"downgrade-package-on-failed-restart"`
 	UseSudo                         bool     `json:"use-sudo"`
 	ArchiveEnable                   bool     `json:"pkg-archive-enable"`
@@ -104,6 +107,8 @@ var config struct {
 	PkgDatabaseFile                 string   `json:"pkg-database-file"`
 	DatabaseFile                    string   `json:"database-file"`
 	ReportDatabaseFile              string   `json:"report-database-file"`
+	UseSyslog                       bool     `json:"syslog-enable"`
+	SyslogPriority                  string   `json:"syslog-priority"`
 	Param_DebugMode                 *bool
 	Param_RunOnce                   *bool
 	Param_ConfigFile                *string
@@ -125,7 +130,7 @@ var config struct {
 	FileExistsNoLog          bool
 }
 
-// 1575 "pkg-updated.nw"
+// 1728 "pkg-updated.nw"
 const LOG_FATAL = "FATAL"
 const LOG_FATAL2 = "FATAL2"
 const LOG_DEBUG = "DEBUG"
@@ -135,13 +140,13 @@ const LOG_EVENT = "EVENT"
 const LOG_STDOUT = "CONSOLE_STDOUT"
 const LOG_STDERR = "CONSOLE_STDERR"
 
-// 1966 "pkg-updated.nw"
+// 2156 "pkg-updated.nw"
 func HelpPage() {
 	fmt.Printf("pkg-updated help:\n\n")
 	fmt.Printf("Usage: pkg-updated [-option] [-option] ... [-option <FILENAME>] ... \n\n")
 	fmt.Printf("Options:\n--------\n")
 	fmt.Printf("-help\t\t\t\tShow this page\n")
-	fmt.Printf("-config <FILENAME>\t\t\t\tPath to config file to use\n")
+	fmt.Printf("-config <FILENAME>\t\tPath to config file to use\n")
 	fmt.Printf("-debug\t\t\t\tRuns in debug mode and prints all LOG types\n")
 	fmt.Printf("-runone\t\t\t\tDisable scheduler and just run once update procedure\n")
 	fmt.Printf("-version\t\t\tShow version and exit\n")
@@ -166,7 +171,7 @@ func Version() {
 	os.Exit(0)
 }
 
-// 1838 "pkg-updated.nw"
+// 2025 "pkg-updated.nw"
 func FileExists(filename string) int {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -180,7 +185,7 @@ func FileExists(filename string) int {
 	return 0
 }
 
-// 1715 "pkg-updated.nw"
+// 1902 "pkg-updated.nw"
 func Check() {
 	var ret int
 
@@ -255,7 +260,7 @@ func Check() {
 
 }
 
-// 238 "pkg-updated.nw"
+// 258 "pkg-updated.nw"
 func ReadConfig() int {
 	Logging(LOG_DEBUG, "readconfig", fmt.Sprintf("Read config file: %s", *config.Param_ConfigFile))
 
@@ -274,7 +279,7 @@ func ReadConfig() int {
 	return 0
 }
 
-// 334 "pkg-updated.nw"
+// 354 "pkg-updated.nw"
 func OpenDB(filename string) *sql.DB {
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
@@ -286,14 +291,14 @@ func OpenDB(filename string) *sql.DB {
 
 func CreateDatabase(db *sql.DB, id int) int {
 
-	// 614 "pkg-updated.nw"
+	// 634 "pkg-updated.nw"
 	var DBSchema []string
 	DBSchema = make([]string, 2)
 	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);"
-	// 626 "pkg-updated.nw"
+	// 646 "pkg-updated.nw"
 	DBSchema[1] = "CREATE TABLE report (id INTEGER NOT NULL PRIMARY KEY, timestamp INTEGER, eventtype TEXT, facility TEXT, message TEXT NOT NULL); CREATE INDEX report_type ON report (eventtype COLLATE NOCASE);"
 
-	// 347 "pkg-updated.nw"
+	// 367 "pkg-updated.nw"
 	_, err := db.Exec(DBSchema[id])
 	if err != nil {
 		Logging(LOG_ERROR, "createdb", fmt.Sprintf("Schema: %s | error: %s", DBSchema[id], err))
@@ -302,7 +307,7 @@ func CreateDatabase(db *sql.DB, id int) int {
 	return 0
 }
 
-// 368 "pkg-updated.nw"
+// 388 "pkg-updated.nw"
 func CountRows(db *sql.DB, table string, column string, search string) int {
 	var result int
 
@@ -315,7 +320,7 @@ func CountRows(db *sql.DB, table string, column string, search string) int {
 	return result
 }
 
-// 384 "pkg-updated.nw"
+// 404 "pkg-updated.nw"
 func GetPackageInfo(db *sql.DB, field string, pkgname string, opts ...string) (string, error) {
 	var (
 		result string
@@ -382,7 +387,7 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts ...string) (s
 	return result, nil
 }
 
-// 454 "pkg-updated.nw"
+// 474 "pkg-updated.nw"
 func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {
 	tx, err := db.Begin()
 	if err != nil {
@@ -408,7 +413,7 @@ func AddPackage(db *sql.DB, name string, origin string, version string, status s
 	return 0
 }
 
-// 483 "pkg-updated.nw"
+// 503 "pkg-updated.nw"
 func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field string, where_value string, opts ...string) int {
 	var query string
 
@@ -440,7 +445,7 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 	return 0
 }
 
-// 518 "pkg-updated.nw"
+// 538 "pkg-updated.nw"
 func GetAllPackages(db *sql.DB, opts ...string) ([]string, error) {
 	var (
 		result []string
@@ -484,7 +489,7 @@ func GetAllPackages(db *sql.DB, opts ...string) ([]string, error) {
 	return result, err
 }
 
-// 567 "pkg-updated.nw"
+// 587 "pkg-updated.nw"
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {
 	tx, err := db.Begin()
 	if err != nil {
@@ -507,7 +512,7 @@ func AddService(db *sql.DB, name string, svccmd string, enabled int) int {
 	return 0
 }
 
-// 1638 "pkg-updated.nw"
+// 1794 "pkg-updated.nw"
 func AddLogToDB(recordtime time.Time, logtype string, facility string, msg string) int {
 	reportdb := OpenDB(config.ReportDatabaseFile)
 	defer reportdb.Close()
@@ -533,7 +538,38 @@ func AddLogToDB(recordtime time.Time, logtype string, facility string, msg strin
 	return 0
 }
 
-// 1591 "pkg-updated.nw"
+// 1829 "pkg-updated.nw"
+func Syslog(prio string, facility string, msg string) {
+	var priority syslog.Priority
+	switch prio {
+	case "LOG_EMERG":
+		priority = syslog.LOG_EMERG
+	case "LOG_ALERT":
+		priority = syslog.LOG_ALERT
+	case "LOG_CRIT":
+		priority = syslog.LOG_CRIT
+	case "LOG_ERR":
+		priority = syslog.LOG_ERR
+	case "LOG_WARNING":
+		priority = syslog.LOG_WARNING
+	case "LOG_NOTICE":
+		priority = syslog.LOG_NOTICE
+	case "LOG_DEBUG":
+		priority = syslog.LOG_DEBUG
+	case "LOG_INFO":
+		priority = syslog.LOG_INFO
+	default:
+		priority = syslog.LOG_NOTICE
+	}
+	syslogwriter, err := syslog.New(priority, "pkg-updated")
+	if err != nil {
+		Logging(LOG_FATAL2, "syslog", "Not able to send logs to syslog")
+		log.SetOutput(syslogwriter)
+	}
+	log.Print(fmt.Sprintf("[%s]: %s", facility, msg))
+}
+
+// 1743 "pkg-updated.nw"
 func Logging(logtype string, facility string, msg string) {
 	recordtime := time.Now()
 	die := 0
@@ -570,22 +606,26 @@ func Logging(logtype string, facility string, msg string) {
 		}
 	}
 
+	if config.UseSyslog == true {
+		Syslog(config.SyslogPriority, facility, msg)
+	}
+
 	/* Need to die if fatal error happend */
 	if die >= 1 {
 		os.Exit(die)
 	}
 }
 
-// 1855 "pkg-updated.nw"
+// 2042 "pkg-updated.nw"
 func RunCmd(cmd string, opts ...string) (string, error) {
 	var (
 		cmdName    string
 		cmdArgs    []string
 		cmdArg1    []string
-		cmdTimeout time.Duration
+		cmdTimeout string
 		err        error
 	)
-	cmdTimeout = (60 * time.Second)
+	cmdTimeout = "60"
 	cmdStdOut := &bytes.Buffer{}
 	cmdStdErr := &bytes.Buffer{}
 
@@ -593,40 +633,40 @@ func RunCmd(cmd string, opts ...string) (string, error) {
 	switch cmd {
 	case "install":
 		cmdArg1 = []string{"install", "-y", "-f"}
-		cmdTimeout = (30 * time.Second)
+		cmdTimeout = "30"
 	case "update":
 		cmdArg1 = []string{"update", "-f"}
-		cmdTimeout = (60 * time.Second)
+		cmdTimeout = "60"
 	case "lock":
 		cmdArg1 = []string{"lock", "-y"}
-		cmdTimeout = (10 * time.Second)
+		cmdTimeout = "10"
 	case "unlock":
 		cmdArg1 = []string{"unlock", "-y"}
-		cmdTimeout = (10 * time.Second)
+		cmdTimeout = "10"
 	case "upgrade":
 		cmdArg1 = []string{"upgrade", "-y"}
-		cmdTimeout = (300 * time.Second)
+		cmdTimeout = "300"
 	case "create":
 		cmdArg1 = []string{"create", "-o"}
-		cmdTimeout = (120 * time.Second)
+		cmdTimeout = "120"
 	case "version":
 		cmdArg1 = []string{"version", "-Rov"}
-		cmdTimeout = (60 * time.Second)
+		cmdTimeout = "60"
 	case "which":
 		cmdArg1 = []string{"which", "-qo"}
-		cmdTimeout = (10 * time.Second)
+		cmdTimeout = "10"
 	case "sleep":
 		_, err = exec.Command("sleep", opts[0]).CombinedOutput()
 		return "wakeup", err
 	case "service":
 		cmdName = "service"
 		cmdArg1 = []string{"-e"}
-		cmdTimeout = (30 * time.Second)
+		cmdTimeout = "30"
 	case "service_restart":
 		cmdName = opts[0]
 		opts[0] = ""
 		cmdArg1 = []string{"restart"}
-		cmdTimeout = (30 * time.Second)
+		cmdTimeout = "30"
 	}
 
 	if config.UseSudo == true {
@@ -647,7 +687,7 @@ func RunCmd(cmd string, opts ...string) (string, error) {
 		cmdline.WriteString(" ")
 		cmdline.WriteString(value)
 	}
-	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s", cmdline.String()))
+	Logging(LOG_DEBUG, "runcmd", fmt.Sprintf("Run command: %s | cmd timeout: %s seconds", cmdline.String(), cmdTimeout))
 
 	cmdExec := exec.Command(cmdName, cmdArgs...)
 	cmdExec.Stdout = cmdStdOut
@@ -658,14 +698,17 @@ func RunCmd(cmd string, opts ...string) (string, error) {
 	}
 
 	// cmd timeout function, need to kill after timeout reached
-	go func() {
-		time.Sleep(cmdTimeout)
-		inerr := cmdExec.Process.Kill()
-		if inerr != nil {
-			Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic: %s", err))
-		}
-		Logging(LOG_DEBUG, "runcmd", "Killed running command, timeout reached")
-	}()
+	go func(cmd *exec.Cmd) {
+		RunCmd("sleep", cmdTimeout)
+		cmd.Process.Kill()
+		/*	The Sleep it self is a problem, if the cmdExec is done, the kill will run and end the sleep, but no error from sub kill can catched
+			inerr := cmd.Process.Kill()
+			if inerr != nil {
+				Logging(LOG_FATAL2, "runcmd", fmt.Sprintf("Panic in cmd process timeout kill: %v", err));
+			}
+			Logging(LOG_DEBUG, "runcmd", "Killed running command, timeout reached");
+		*/
+	}(cmdExec)
 	err = cmdExec.Wait()
 
 	Logging(LOG_STDOUT, "runcmd", fmt.Sprintf("StdOut [%s]: %s", cmdline.String(), cmdStdOut.String()))
@@ -676,12 +719,12 @@ func RunCmd(cmd string, opts ...string) (string, error) {
 	return cmdStdOut.String(), err
 }
 
-// 1958 "pkg-updated.nw"
+// 2148 "pkg-updated.nw"
 func chop(s string) string {
 	return s[0 : len(s)-1]
 }
 
-// 715 "pkg-updated.nw"
+// 735 "pkg-updated.nw"
 func SyncPkgDatabases(db *sql.DB) error {
 	dbpkg := OpenDB(config.PkgDatabaseFile)
 	defer dbpkg.Close()
@@ -730,7 +773,7 @@ func SyncPkgDatabases(db *sql.DB) error {
 		locked  int
 	)
 
-	// 776 "pkg-updated.nw"
+	// 796 "pkg-updated.nw"
 	for rows.Next() {
 		rows.Scan(&name, &version, &origin, &locked)
 		request, err = GetPackageInfo(db, "name", name)
@@ -759,7 +802,7 @@ func SyncPkgDatabases(db *sql.DB) error {
 	return nil
 }
 
-// 819 "pkg-updated.nw"
+// 839 "pkg-updated.nw"
 func CheckUpdates(db *sql.DB) bool {
 	var (
 		cmdOut  string
@@ -802,7 +845,7 @@ func CheckUpdates(db *sql.DB) bool {
 	return ret
 }
 
-// 1122 "pkg-updated.nw"
+// 1261 "pkg-updated.nw"
 func LockPackage(db *sql.DB, lock int, name string) string {
 	var (
 		lockstatus string
@@ -822,7 +865,7 @@ func LockPackage(db *sql.DB, lock int, name string) string {
 		return lockstatus
 	}
 
-	// 1147 "pkg-updated.nw"
+	// 1286 "pkg-updated.nw"
 	switch lock {
 	case 0:
 		if _, err = RunCmd("unlock", name); err != nil {
@@ -859,7 +902,7 @@ func LockPackage(db *sql.DB, lock int, name string) string {
 	return lockstatus
 }
 
-// 1187 "pkg-updated.nw"
+// 1326 "pkg-updated.nw"
 func LockExclude(db *sql.DB, lock int) {
 	var mode string
 	switch lock {
@@ -876,12 +919,13 @@ func LockExclude(db *sql.DB, lock int) {
 	}
 }
 
-// 1054 "pkg-updated.nw"
-func RollbackPackage(db *sql.DB, name string) {
+// 1191 "pkg-updated.nw"
+func RollbackPackage(db *sql.DB, name string) bool {
 	var (
 		path   string
 		cmdOut string
 		err    error
+		ret    bool
 	)
 
 	if path, err = GetPackageInfo(db, "archivepath", name); err != nil {
@@ -890,9 +934,9 @@ func RollbackPackage(db *sql.DB, name string) {
 
 	if path == "NULL" {
 		Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback Error: No rollback pkg available for package %s", name))
-		return
+		return ret
 	}
-	Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s , pkg: %s", name, path))
+	Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Rollback package: %s, pkg file: %s", name, path))
 
 	if cmdOut, err = RunCmd("install", path); err != nil {
 		Logging(LOG_ERROR, "rollbackpackage", fmt.Sprintf("Install error: %s", err))
@@ -904,12 +948,14 @@ func RollbackPackage(db *sql.DB, name string) {
 	}
 	*/
 	Logging(LOG_DEBUG, "rollbackpackage", fmt.Sprintf("Output: %s", string(cmdOut)))
-	return
+
+	ret = true
+	return ret
 }
 
-// 1398 "pkg-updated.nw"
+// 1537 "pkg-updated.nw"
 func ScanEnabledServices(db *sql.DB) {
-	if config.RestartDaemons == true {
+	if config.RestartServices == true {
 		var (
 			pkgorigin string
 			pkgname   string
@@ -956,7 +1002,7 @@ func ScanEnabledServices(db *sql.DB) {
 	}
 }
 
-// 1454 "pkg-updated.nw"
+// 1593 "pkg-updated.nw"
 func ScanScript(path string, preout string) (int, string, error) {
 	var (
 		err error
@@ -986,7 +1032,7 @@ func ScanScript(path string, preout string) (int, string, error) {
 	return 0, cmdOut, nil
 }
 
-// 1487 "pkg-updated.nw"
+// 1626 "pkg-updated.nw"
 func RestartService(svc string) int {
 	var (
 		ret int
@@ -999,62 +1045,76 @@ func RestartService(svc string) int {
 	return ret
 }
 
-// 1505 "pkg-updated.nw"
-func RestartEnabledServices(db *sql.DB) []string {
+// 1644 "pkg-updated.nw"
+func RestartEnabledServices(db *sql.DB, pkglist []string) []string {
 	var (
-		ret       int
-		err       error
-		pkglist   []string
-		tmplist   []string
-		svc       string
-		enabled   string
-		pkgname   string
-		pkgstatus string
+		ret         int
+		err         error
+		failpkglist []string
+		tmplist     []string
+		svccmd      []string
+		pkgname     string
+		excluded    bool
 	)
 
-	svccmd, err := GetAllPackages(db, "svccmd", "services")
-	if err != nil {
-		Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service list: %s", err))
-	}
+	if len(pkglist) > 0 {
+		Logging(LOG_ERROR, "restartenableservices", "Iterate over all enabled services")
 
-	for _, value := range svccmd {
-		enabled, err = GetPackageInfo(db, "enabled", value, "services", "svccmd")
+		svccmd, err = GetAllPackages(db, "svccmd", "services WHERE enabled=1")
 		if err != nil {
-			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service enable status: %s", value))
+			Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get service list: %s", err))
+			return failpkglist
 		}
-		if enabled == "1" {
-			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Service is enabled: %s", value))
+		if len(svccmd) == 0 {
+			Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("No enabled services found: %s", svccmd))
+			return failpkglist
+		}
 
-			pkgname, err = GetPackageInfo(db, "name", value, "services", "svccmd")
-			if err != nil {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value))
-				continue
+		for _, value1 := range svccmd {
+			excluded = false
+			for _, disabledsvc := range config.ExcludedServices {
+				if disabledsvc == value1 {
+					Logging(LOG_INFO, "restartenableservices", fmt.Sprintf("Service is excluded from restart: %s", disabledsvc))
+					excluded = true
+				}
 			}
+			if excluded == false {
+				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Search pkgname for svccmd: %s", value1))
+				pkgname, err = GetPackageInfo(db, "name", value1, "services", "svccmd")
+				if pkgname == "ENOEXIST" {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("No pkg name for service found: %s", value1))
+					continue
+				}
+				if err != nil {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get pkg name from service: %s", value1))
+					continue
+				}
+				for _, value2 := range pkglist {
+					Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Iterate pkglist: %s", value2))
 
-			pkgstatus, err = GetPackageInfo(db, "status", pkgname, "packages", "name")
-			if err != nil {
-				Logging(LOG_ERROR, "restartenableservices", fmt.Sprintf("Unable to get update status from service: %s", value))
-				continue
-			}
-
-			if pkgstatus == "update-available" {
-				Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value))
-				ret = RestartService(value)
-				if ret != 0 {
-					Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put service on rollback list: %s", value))
-					svc, err = GetPackageInfo(db, "name", value, "services", "svccmd")
-					tmplist = make([]string, len(pkglist)+1)
-					copy(tmplist, pkglist)
-					pkglist = tmplist
-					pkglist[len(pkglist)-1] = svc
+					if pkgname == value2 {
+						Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Try to restart service: %s", value1))
+						ret = RestartService(value1)
+						if ret != 0 {
+							Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Failed to restart: %s", value1))
+							Logging(LOG_DEBUG, "restartenableservices", fmt.Sprintf("Put pkg on rollback list: %s", pkgname))
+							tmplist = make([]string, len(failpkglist)+1)
+							copy(tmplist, failpkglist)
+							failpkglist = tmplist
+							pkglist[len(failpkglist)-1] = pkgname
+						}
+					}
 				}
 			}
 		}
+	} else {
+		Logging(LOG_EVENT, "restartenableservices", "No packages were updated, no restart needed")
 	}
-	return pkglist
+
+	return failpkglist
 }
 
-// 939 "pkg-updated.nw"
+// 982 "pkg-updated.nw"
 func GetUpdateList(db *sql.DB) ([]string, error) {
 	var list []string
 	var name string
@@ -1082,7 +1142,7 @@ func GetUpdateList(db *sql.DB) ([]string, error) {
 	return list, nil
 }
 
-// 972 "pkg-updated.nw"
+// 1015 "pkg-updated.nw"
 func SavePackages(db *sql.DB) {
 	var (
 		version string
@@ -1096,7 +1156,7 @@ func SavePackages(db *sql.DB) {
 		Logging(LOG_ERROR, "savepackages", fmt.Sprintf("GetUpdateList(): %v", err))
 	}
 
-	// 991 "pkg-updated.nw"
+	// 1034 "pkg-updated.nw"
 	for _, pkg := range updatelist {
 		version, err = GetPackageInfo(db, "version", pkg)
 		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz"
@@ -1111,7 +1171,7 @@ func SavePackages(db *sql.DB) {
 		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz"
 		if _, err := os.Stat(path); err == nil {
 			origin, err = GetPackageInfo(db, "origin", pkg)
-			// 1010 "pkg-updated.nw"
+			// 1053 "pkg-updated.nw"
 			//			if err != nil {
 			Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg))
 			UpdatePackage(db, "archivepath", path, "origin", origin)
@@ -1123,7 +1183,7 @@ func SavePackages(db *sql.DB) {
 	}
 }
 
-// 1027 "pkg-updated.nw"
+// 1070 "pkg-updated.nw"
 func Upgrade() int {
 	var (
 		cmdOut string
@@ -1140,71 +1200,180 @@ func Upgrade() int {
 	return ret
 }
 
-// 873 "pkg-updated.nw"
+// 1094 "pkg-updated.nw"
+func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
+	var (
+		OldList       []string
+		CurrentList   []string
+		NewList       []string
+		err           error
+		pkgname       string
+		tmp           []string
+		index         int
+		found         string
+		OldPkgVersion string
+		NewPkgVersion string
+	)
+
+	OldList, err = GetUpdateList(db)
+	if err != nil {
+		Logging(LOG_DEBUG, "getupdatepkglist", fmt.Sprintf("Error: %s", err))
+	}
+
+	if CheckUpdates(db) == true {
+
+		CurrentList, err = GetUpdateList(db)
+		if len(CurrentList) == 0 {
+			err = errors.New("Updates available, but not returned from GetUpdateList()")
+			Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error: %s", err))
+			return NewList, err
+		}
+
+		// Check updated pkgname with pkgname before update
+		index = 0
+		for _, pkgname = range CurrentList {
+
+			// Search pkgname from currentlist in oldlist
+			for _, prepkgname := range OldList {
+				if pkgname == prepkgname {
+					found = prepkgname
+					break
+				}
+			}
+			if len(found) > 0 {
+				OldPkgVersion, err = GetPackageInfo(db, "version", found, "packages", "name")
+				if err != nil {
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error OldPkgVersion: %s", err))
+					break
+				}
+				NewPkgVersion, err = GetPackageInfo(db, "version", pkgname, "packages", "name")
+				if err != nil {
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error NewPkgVersion: %s", err))
+					break
+				}
+
+				if OldPkgVersion == "ENOEXIST" {
+					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("No Pkg version information available for: %s", found))
+					break
+				}
+				if NewPkgVersion == "ENOEXIST" {
+					Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package install failed: %s", pkgname))
+					break
+				}
+				if OldPkgVersion == NewPkgVersion {
+					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Update failed for pkg: %s", pkgname))
+					break
+				}
+
+				tmp = make([]string, len(NewList)+1)
+				copy(tmp, NewList)
+				tmp[index] = pkgname
+				NewList = tmp
+				Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s", pkgname))
+			} else {
+				Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package installed: %s", pkgname))
+			}
+			index++
+			found = ""
+		}
+	} else {
+		Logging(LOG_DEBUG, "getupdatepkglist", "All packages were successfully updated")
+		NewList = make([]string, len(OldList))
+		for index, pkgname = range OldList {
+			Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s", pkgname))
+			NewList[index] = pkgname
+		}
+	}
+	return NewList, err
+}
+
+// 894 "pkg-updated.nw"
 func UpdateRoutine(db *sql.DB) bool {
 	var (
 		ret               bool
 		updates_available bool
+		rollback_status   bool
+		restart_status    int
+		service           string
+		updated_pkgs      []string
+		err               error
 	)
 
-	Logging(LOG_EVENT, "updateroutine", "Start update routine")
+	Logging(LOG_EVENT, "updateroutine", "Start with sync the databases")
 	SyncPkgDatabases(db)
 
+	Logging(LOG_EVENT, "updateroutine", "Check for Updates")
 	updates_available = CheckUpdates(db)
 
 	if updates_available == true {
 		Logging(LOG_EVENT, "updateroutine", "Updates available")
 
 		if config.ArchiveEnable {
-			Logging(LOG_EVENT, "updateroutine", "Save package")
+			Logging(LOG_EVENT, "updateroutine", "Archive packages")
 			SavePackages(db)
 		}
 
-		// 1204 "pkg-updated.nw"
+		// 1343 "pkg-updated.nw"
 		LockExclude(db, 1)
-		// 892 "pkg-updated.nw"
+
+		// 920 "pkg-updated.nw"
+		Logging(LOG_EVENT, "updateroutine", "Scan enabled Services")
 		ScanEnabledServices(db)
 
+		Logging(LOG_EVENT, "updateroutine", "Start pkg Upgrade")
 		if Upgrade() != 0 {
-			Logging(LOG_EVENT, "updateroutine", "Pkg Upgrade failed")
+			Logging(LOG_EVENT, "updateroutine", "The pkg Upgrade failed.")
 			return ret
 		}
 
-		if config.RestartDaemons == true {
-			svc := RestartEnabledServices(db)
-			if len(svc) > 0 {
+		// Check updated packages and return the list
+		Logging(LOG_EVENT, "updateroutine", "Get list of successful updated packages")
+		updated_pkgs, err = GetUpdatedPkgList(db)
+		if err != nil {
+			Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Error: %s", err))
+		}
+
+		if config.RestartServices == true {
+			failedpkglist := RestartEnabledServices(db, updated_pkgs)
+			if len(failedpkglist) > 0 {
 				Logging(LOG_EVENT, "updateroutine", "Service restart failed")
 				if config.DowngradePackageOnFailedRestart == true {
 					Logging(LOG_EVENT, "updateroutine", "Starting rollback")
 
 					//iterate through the list of failed restarts
-					for _, pkgname := range svc {
-						RollbackPackage(db, pkgname)
+					for _, pkgname := range failedpkglist {
+						rollback_status = RollbackPackage(db, pkgname)
+						if rollback_status == true {
+							service, err = GetPackageInfo(db, "svccmd", pkgname, "services", "name")
+							if err != nil {
+								Logging(LOG_ERROR, "updateroutine", fmt.Sprintf("Error, could not found service command from package: %s", pkgname))
+								continue
+							}
+							Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Rollback of pkg [%s] succeed, restart service again: %s", pkgname, service))
+							restart_status = RestartService(service)
+							if restart_status != 0 {
+								Logging(LOG_EVENT, "updateroutine", fmt.Sprintf("Restart of service [%s] failed again, please take manual actions to recover", service))
+							}
+						}
 					}
 				}
 			}
 		}
 
-		// 1207 "pkg-updated.nw"
+		// 1346 "pkg-updated.nw"
 		LockExclude(db, 0)
-		// 914 "pkg-updated.nw"
+		// 963 "pkg-updated.nw"
 	} else {
 		Logging(LOG_EVENT, "updateroutine", "No updates available")
 	}
-	/* Second RUN
-	Need to verify how it behaves
-
-	if config.ClearSyncDatabaseEnabled == true {
-		config.ClearSyncDatabaseEnabled = false
-	}
-	SyncPkgDatabases(db)
-	*/
 
 	ret = true
+	Logging(LOG_EVENT, "updateroutine", "Update routine done")
+
 	return ret
 }
 
-// 1252 "pkg-updated.nw"
+// 1391 "pkg-updated.nw"
 func Scheduler(db *sql.DB) {
 	var (
 		err            error
@@ -1314,10 +1483,10 @@ func Scheduler(db *sql.DB) {
 	}
 }
 
-// 636 "pkg-updated.nw"
+// 656 "pkg-updated.nw"
 func main() {
 
-	// 1808 "pkg-updated.nw"
+	// 1995 "pkg-updated.nw"
 	config.Param_Help = flag.Bool("help", false, "Show help page and exit")
 	config.Param_Version = flag.Bool("version", false, "Show version and exit")
 	config.Param_ConfigFile = flag.String("config", "", "Path to alternativ config file")
@@ -1340,7 +1509,7 @@ func main() {
 
 	flag.Parse()
 
-	// 653 "pkg-updated.nw"
+	// 673 "pkg-updated.nw"
 	Check()
 
 	Logging(LOG_EVENT, "main", fmt.Sprintf("Started pkg-updated %d.%d.%d", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION))
@@ -1377,7 +1546,7 @@ func main() {
 		reportdb.Close()
 	}
 
-	// 695 "pkg-updated.nw"
+	// 715 "pkg-updated.nw"
 	if *config.Param_RunOnce != true {
 		go Scheduler(db)
 		for {
@@ -1386,5 +1555,5 @@ func main() {
 	} else {
 		UpdateRoutine(db)
 	}
-	// 1212 "pkg-updated.nw"
+	// 1351 "pkg-updated.nw"
 }
