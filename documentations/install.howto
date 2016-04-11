@@ -1,0 +1,55 @@
+Howto install pkg-updated
+
+There are multiply ways to install this software.
+The easiest way is to use the pkg.
+If you like to compile the software first, use port or source based installation.
+
+
+From Source:
+############
+
+Required packages for install:
+
+- noweb
+- gmake
+- go
+
+git clone https://github.com/scd-systems/pkg-updated.git
+make
+make install
+
+
+Required packages for generating the pdf out of the pkg-updated.nw file:
+
+- tex-formats
+- tex-dvipsk
+- pdflatex
+- perl5 
+
+From port (head): 
+#################
+
+git clone https://github.com/scd-systems/ports.git
+sudo mkdir /usr/ports/sysutils/pkg-updated
+sudo cp sysutils/pkg-updated/* /usr/ports/sysutils/pkg-updated
+cd /usr/ports/sysutils/pkg-updated
+sudo make install clean
+
+Enable as service:
+sysrc pkgupdated_enable="YES"
+sudo service pkg-updated start
+
+
+From Ports (still yet not available):
+#####################################
+
+cd /usr/ports/sysutils/pkg-updated
+sudo make install clean
+
+From pkg (still yet not available):
+###################################
+
+Just run:
+
+sudo pkg install pkg-updated
+

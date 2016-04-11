@@ -13,9 +13,9 @@ Features:
 
 - Configurable scheduler for recurring updates
 - Archive packages before upgrade (for rollback)
-- Restart services if an enabled running service was updated
+- Restart services if service was updated
 - Rollback updated packages on failed service restart
-- Reporting 
+- Reporting (not finished yet) 
 
 
 How to Start
@@ -31,7 +31,6 @@ git clone https://github.com/scd-systems/pkg-updated.git
 3\. Create the documentation:
 
 ```bash
-cd src;
 make pdf
 ```
 
@@ -43,7 +42,6 @@ Open the `pkg-updated.nw` file
 If you are done, re-create the documentation, the code or both:
 
 ```bash
-cd src;
 make
 ```
 
