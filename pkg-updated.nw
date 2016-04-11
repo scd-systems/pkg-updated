@@ -1404,6 +1404,8 @@ func Scheduler(db *sql.DB){
 		diff int64;
 		diff2 int;
 		RecurUnixStamp int;
+		prefix_recur_minute string;
+		prefix_now_minute string;
 	)
 
 	sleeptimer = 60;
@@ -1491,7 +1493,18 @@ func Scheduler(db *sql.DB){
 			AlreadyRun = false;
 		}
 
-		Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("RecurTime: %v:%v | Now: %v:%v | Weekday: %v | Weekday Match: %v | AlreadyRun: %v", recur.Hour(), recur.Minute(), TimeNow.Hour(), TimeNow.Minute(), int(TimeNow.Weekday()), checkday, AlreadyRun));
+		if (recur.Minute() < 10){
+			prefix_recur_minute = "0";
+		} else {
+			prefix_recur_minute = "";		
+		}
+		if (TimeNow.Minute() < 10){
+			prefix_now_minute = "0";
+		} else {
+			prefix_now_minute = "";		
+		}
+		
+		Logging(LOG_DEBUG, "scheduler", fmt.Sprintf("RecurTime: %v:%s%v | Now: %v:%s%v | Weekday: %v | Weekday Match: %v | AlreadyRun: %v", recur.Hour(), prefix_recur_minute, recur.Minute(), TimeNow.Hour(), prefix_now_minute, TimeNow.Minute(), int(TimeNow.Weekday()), checkday, AlreadyRun));
 
         RunCmd("sleep", strconv.Itoa(sleeptimer));
 	}
