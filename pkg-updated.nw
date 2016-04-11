@@ -26,7 +26,7 @@ Legend:
 
 Ideas: 
 	- [x] Version 0.3: Scheduler
-	- [/] Version 0.3: Readme / Howto use
+	- [x] Version 0.3: Readme / Howto use
 	- [x] Version 0.3: Parametrized program
 	- [x] Version 0.3: finalize pkg rollback for failed updates
 	- [x] Version 0.4: Check userid and sudo usage
@@ -35,7 +35,7 @@ Ideas:
 	- [x] Version 0.4: Add weekdays as recurring option in scheduler
 	- Version 0.5: Refactor all variable names and functions
 	- Version 0.5: Proper error handling
-	- [/] Version 0.5: Port
+	- [x] Version 0.5: Port
 	- Version 0.5: Port without using gmake
 	- [/] Version 0.5: rc.d script
 	- Version 0.5: Add Output from updated pkg messages to reportdb
@@ -1853,11 +1853,11 @@ func Syslog(prio string, facility string, msg string) {
 		default: priority = syslog.LOG_NOTICE;
 	}
 	syslogwriter, err := syslog.New(priority, "pkg-updated");
+	defer syslogwriter.Close();	
 	if (err != nil) {
 		Logging(LOG_FATAL2, "syslog", "Not able to send logs to syslog");
-		log.SetOutput(syslogwriter);
 	}
-	log.Print(fmt.Sprintf("[%s]: %s", facility, msg));
+	syslogwriter.Write([]byte(msg));
 }
 @
 
