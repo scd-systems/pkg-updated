@@ -868,9 +868,9 @@ func CheckUpdates(db *sql.DB) bool {
 			version, err = GetPackageInfo(db, "version", pkgname.String(), "packages", "origin")	
 			if (err != nil){
 				Logging(LOG_FATAL, "checkupdates", fmt.Sprintf("Error to get version from package: %s", err));
-			}
-
-			UpdatePackage(db, "prev-version", version, "origin", pkgname.String());
+			} else {
+				UpdatePackage(db, "prev-version", version, "origin", pkgname.String());
+			}	
 			Logging(LOG_DEBUG, "checkupdates", fmt.Sprintf("Update available for pkg: %s", pkgname.String()));
 			pkgname.Reset();
 			ret = true;
@@ -1130,8 +1130,6 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 				}				
 			}
 			if (len(found) > 0){
-			
-				// BUG: Does not work, because new version is already saved into DB !
 				OldPkgVersion, err = GetPackageInfo(db, "prev-version", found, "packages", "name")
 				if (err != nil){
 					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error to get OldPkgVersion: %s", err));
