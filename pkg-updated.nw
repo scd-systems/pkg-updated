@@ -935,6 +935,9 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			return ret;
 		}
 
+		Logging(LOG_EVENT, "updateroutine", "Sync database again");
+		SyncPkgDatabases(db);
+
 		// Check updated packages and return the list		
 		Logging(LOG_EVENT, "updateroutine", "Get list of successful updated packages");
 		updated_pkgs, err = GetUpdatedPkgList(db);		
@@ -1102,6 +1105,7 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 		found string;
 		OldPkgVersion string;
 		NewPkgVersion string;
+		lockstatus string;
 	)
 	
 	OldList, err = GetUpdateList(db);
@@ -1122,6 +1126,16 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 		index = 0;
 		for _, pkgname = range CurrentList {	
 
+			lockstatus, err = GetPackageInfo(db, "lockstatus", pkgname, "packages", "name")
+			if (err != nil){
+				Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("Error to get lockstatus: %s", err));
+				continue;	
+			}
+			if ((lockstatus == "1") || (lockstatus == "2")){
+				Logging(LOG_INFO, "getupdatepkglist", fmt.Sprintf("Locked package with available update are not updated: %s", pkgname));
+				continue;
+			}
+
 			// Search pkgname from currentlist in oldlist
 			for _, prepkgname := range OldList {
 				if (pkgname == prepkgname){
@@ -1140,7 +1154,6 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error to get NewPkgVersion: %s", err));
 					continue;	
 				}
-
 				if (OldPkgVersion == "ENOEXIST") {
 					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("No Pkg version information available for: %s", found));
 					continue;
