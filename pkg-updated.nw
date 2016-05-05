@@ -731,7 +731,7 @@ Maybe need to implement some self-healing checks every five minutes or other tas
 In every iteration round from daemon, we must synchronize the local package information's to the pkg-updated database.
 This is necessary, because pkg-updated will never touch the pkg databases it self, it will use his own.
 The synchronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
-			
+It is also important to unset [[lockstatus]] before syncing, otherwise the status will overwritten and locked packages never be unlocked again.  
 
 <<pkg-updated.go: syncdb>>=
 func SyncPkgDatabases(db *sql.DB) error {
@@ -924,11 +924,12 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			Logging(LOG_EVENT, "updateroutine", "Archive packages");
 			SavePackages(db);
 		}
-		<<pkg-updated.go: lockexclude>>
 
 		Logging(LOG_EVENT, "updateroutine", "Scan enabled Services");
 		ScanEnabledServices(db)
 
+		<<pkg-updated.go: lockexclude>>
+		
 		Logging(LOG_EVENT, "updateroutine", "Start pkg Upgrade");
 		if Upgrade() != 0 {
 			Logging(LOG_EVENT, "updateroutine", "The pkg Upgrade failed.");
@@ -1055,12 +1056,14 @@ func SavePackages(db *sql.DB){
 				UpdatePackage(db, "archivepath", path, "origin", origin)
 			}		
 		} else {
-			Logging(LOG_ERROR, "savepackages", fmt.Sprintf("Could not found rollback package file: %s", path));
+			Logging(LOG_INFO, "savepackages", fmt.Sprintf("Rollback package already exists, or cannot be created: %s", path));
 		}
 	}
 }
 @
-
+<<TODO>>=
+// 20160505: SavePackages(): Proper check/verify of existing archive files
+@
 
 2. Start Update and analyse output
 The upgrade process it self is quiet simple (one runcmd step only)
@@ -1121,6 +1124,9 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 
 		Logging(LOG_EVENT, "getupdatepkglist", "Sync database again");
 		SyncPkgDatabases(db);
+		// SyncPkgDatabases will unset lockstatus, need to reset again.
+		// Better code needed here ! 
+		<<pkg-updated.go: lockexclude>>
 
 		// Check updated pkgname with pkgname before update
 		index = 0;
