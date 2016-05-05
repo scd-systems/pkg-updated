@@ -4,7 +4,7 @@ Legend:
 
 Ideas: 
         - [x] Version 0.3: Scheduler
-        - [/] Version 0.3: Readme / Howto use
+        - [x] Version 0.3: Readme / Howto use
         - [x] Version 0.3: Parametrized program
         - [x] Version 0.3: finalize pkg rollback for failed updates
         - [x] Version 0.4: Check userid and sudo usage
@@ -13,16 +13,17 @@ Ideas:
         - [x] Version 0.4: Add weekdays as recurring option in scheduler
         - Version 0.5: Refactor all variable names and functions
         - Version 0.5: Proper error handling
-        - [/] Version 0.5: Port
+        - [x] Version 0.5: Port
         - Version 0.5: Port without using gmake
         - [/] Version 0.5: rc.d script
         - Version 0.5: Add Output from updated pkg messages to reportdb
-        - Version 0.5: Syslog/Logfile
+        - [/] Version 0.5: Syslog/Logfile
         - Version 0.5: Finish book and publish first public beta
         - Version 0.6: Fix bugs and Performance issues
-        - Version 0.7: FreeBSD Port and SelfUpdate routine
+        - Version 0.7: SelfUpdate routine
         - Version 0.8: Bugfix / Cleanup documentation
         - Version 0.9: automate schema upgrade if new schema available
+        - Version 0.9: Sort / Ordered service restart option
         - Version 0.9: Bugfix / Cleanup documentation
         - Version 0.9: Jail support
         - Version 1.0: Stable Release
@@ -30,9 +31,9 @@ Ideas:
         - Version 2.0: Desktop: Panel tool for display successful updates
 
 Bugs:
-        - SyncPackages() will remove the rollback package entry in DB (cause of delete db everytime it runs)
-        - wrong usage of Slices, read again:
-        http://blog.golang.org/go-slices-usage-and-internals
+        - Need to fix RunCmd and timeout
+        - Update status is not updated in syncpkgdb
+        - after upgrade process, the second update process are not reporting the update list correct, if a locked package have updates available cause of exclusion.
 // 20160309: Need to set default config parameters if no parameters set in configfile
 // 20160318: Switch to proper config file format instead using of json format
 // TODO: function + Return code -> string, retcode/error

@@ -9,7 +9,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=3
-	PATCH_VERSION=4
+	PATCH_VERSION=5
 )
 @
 
@@ -42,7 +42,7 @@ Ideas:
 	- [/] Version 0.5: Syslog/Logfile
 	- Version 0.5: Finish book and publish first public beta
 	- Version 0.6: Fix bugs and Performance issues
-	- Version 0.7: FreeBSD Port and SelfUpdate routine
+	- Version 0.7: SelfUpdate routine
 	- Version 0.8: Bugfix / Cleanup documentation
 	- Version 0.9: automate schema upgrade if new schema available
 	- Version 0.9: Sort / Ordered service restart option
@@ -55,15 +55,16 @@ Ideas:
 Bugs:
 	- Need to fix RunCmd and timeout
 	- Update status is not updated in syncpkgdb
-
+	- after upgrade process, the second update process are not reporting the update list correct, if a locked package have updates available cause of exclusion.
 @
 
 \newpage
 \subsection{Configuration}
+
 The [[pkg-updated.conf]] parameters in detail.
 
-The [[exclude]] define the packages, which will not updated automatically.
-Reports of the pkg upgrade progress will be created if parameter is set true (Boolean). 
+%% The [[exclude]] define the packages, which will not updated automatically.
+%% Reports of the pkg upgrade progress will be created if parameter is set true (Boolean). 
 
 <<pkg-updated.conf>>=
 {
@@ -122,6 +123,7 @@ Leave it empty to run every day, same as fill from 0 to 6.
 
 Which packages should never be updated ?
 It is also possible to lock packages by "pkg lock <pkg-name>" command
+
 <<pkg-updated.conf>>=
 	"exclude-packages": [
 		"go"
@@ -1011,6 +1013,11 @@ Iterate through the package list which marked as update-available.
 Create the archive packages for backup and save the archive path and file back to database.
 Before start with archive packages, we check if the package already exists
 
+<<TODO>>=
+// TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
+// TODO: Need to use nil error return correctly !
+@
+
 <<pkg-updated.go: update>>=
 func SavePackages(db *sql.DB){
 	var (
@@ -1025,40 +1032,22 @@ func SavePackages(db *sql.DB){
 		Logging(LOG_ERROR, "savepackages", fmt.Sprintf("GetUpdateList(): %v", err));
 	}
 
-@
-<<TODO>>=
-// TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
-@
-
-<<pkg-updated.go: update>>=
 	for _, pkg := range updatelist {
 		version, err = GetPackageInfo(db, "version", pkg);
 		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz";
 		if _, err := os.Stat(path); err != nil {
+			Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg));
 			RunCmd("create", config.ArchivePath, pkg)
-			index++;
-		}
-	}
-
-	for _, pkg := range updatelist {
-		version, err = GetPackageInfo(db, "version", pkg);
-		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz";
-		if _, err := os.Stat(path); err == nil {
-			origin, err = GetPackageInfo(db, "origin", pkg);
-@
-<<TODO>>=
-// TODO: Need to use nil error return correctly !
-@
-<<pkg-updated.go: update>>=
-//			if err != nil {
-				Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg));
+			index++;			
+			if _, err := os.Stat(path); err == nil {
+				Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Save rollback package into DB: %s", path));
+				origin, err = GetPackageInfo(db, "origin", pkg);
 				UpdatePackage(db, "archivepath", path, "origin", origin)
-//				UpdatePackage(db, origin, "archive", path)
-//			}		
+			}		
 		} else {
 			Logging(LOG_ERROR, "savepackages", fmt.Sprintf("Could not found rollback package file: %s", path));
 		}
-	}	
+	}
 }
 @
 
@@ -1133,26 +1122,26 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 			if (len(found) > 0){
 				OldPkgVersion, err = GetPackageInfo(db, "version", found, "packages", "name")
 				if (err != nil){
-					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error OldPkgVersion: %s", err));
-					break;	
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error to get OldPkgVersion: %s", err));
+					continue;	
 				}
 				NewPkgVersion, err = GetPackageInfo(db, "version", pkgname, "packages", "name")
 				if (err != nil){
-					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error NewPkgVersion: %s", err));
-					break;	
+					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error to get NewPkgVersion: %s", err));
+					continue;	
 				}
 
 				if (OldPkgVersion == "ENOEXIST") {
 					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("No Pkg version information available for: %s", found));
-					break;
+					continue;
 				}
 				if (NewPkgVersion == "ENOEXIST") {
 					Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package install failed: %s", pkgname));
-					break;
+					continue;
 				}
 				if (OldPkgVersion == NewPkgVersion){
 					Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Update failed for pkg: %s", pkgname));
-					break;			
+					continue;			
 				}			
 
 				tmp = make([]string, len(NewList)+1);
@@ -1762,9 +1751,15 @@ func Logging(logtype string, facility string, msg string){
 
 	if (*config.Param_DebugMode == true) {
 		fmt.Printf("[%s][%s] at %s: %s\n",logtype, facility, recordtime, msg);
+		if (config.UseSyslog == true) {
+			Syslog(config.SyslogPriority, facility, msg)
+		}
 	} else {
 		if (logtype == LOG_EVENT){
 			fmt.Printf("%s\n", msg);
+			if (config.UseSyslog == true) {
+				Syslog(config.SyslogPriority, facility, msg)
+			}
 		}
 	}
 
@@ -1787,10 +1782,6 @@ func Logging(logtype string, facility string, msg string){
 				fmt.Printf("Report DB not working\n");			
 			}
 		}
-	}
-
-	if (config.UseSyslog == true) {
-		Syslog(config.SyslogPriority, facility, msg)
 	}
 
 	/* Need to die if fatal error happend */
