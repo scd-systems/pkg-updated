@@ -635,7 +635,7 @@ For jailed version need additional in package and service schema:
 <<pkg-updated.go: sqlite-schema>>=
 	var DBSchema []string;
 	DBSchema = make([]string, 2)
-	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prev-version TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
+	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
 @
 
 The Reporting Database needs follow schema
@@ -869,7 +869,7 @@ func CheckUpdates(db *sql.DB) bool {
 			if (err != nil){
 				Logging(LOG_FATAL, "checkupdates", fmt.Sprintf("Error to get version from package: %s", err));
 			} else {
-				UpdatePackage(db, "prev-version", version, "origin", pkgname.String());
+				UpdatePackage(db, "prevversion", version, "origin", pkgname.String());
 			}	
 			Logging(LOG_DEBUG, "checkupdates", fmt.Sprintf("Update available for pkg: %s", pkgname.String()));
 			pkgname.Reset();
@@ -1130,7 +1130,7 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 				}				
 			}
 			if (len(found) > 0){
-				OldPkgVersion, err = GetPackageInfo(db, "prev-version", found, "packages", "name")
+				OldPkgVersion, err = GetPackageInfo(db, "prevversion", found, "packages", "name")
 				if (err != nil){
 					Logging(LOG_FATAL, "getupdatepkglist", fmt.Sprintf("Error to get OldPkgVersion: %s", err));
 					continue;	
