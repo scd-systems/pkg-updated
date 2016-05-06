@@ -369,7 +369,8 @@ func CreateDatabase(db *sql.DB, id int) int {
 	if err != nil {
 		Logging(LOG_ERROR, "createdb", fmt.Sprintf("Schema: %s | error: %s", DBSchema[id], err))
 		return -1
-	}	
+	}
+	Logging(LOG_SQL, "createdb", fmt.Sprintf("Successful created DB Schema: %s", DBSchema[id]))
 	return 0;
 }
 @
@@ -387,14 +388,18 @@ We need a help function for count(*) because
 
 <<pkg-updated.go: sqlite-connect>>=
 func CountRows(db *sql.DB, table string, column string, search string) int {
-	var result int;	
+	var (
+		result int;
+		logsql string;
+	)
 
 	err := db.QueryRow("SELECT count(*) FROM "+ table +" WHERE "+ column +" = '"+ search +"';").Scan(&result)
 	if err != nil {
 		Logging(LOG_ERROR, "countrows", fmt.Sprint(err));
 		return -1;
 	}
-	Logging(LOG_DEBUG, "countrows", fmt.Sprintf("sql query: SELECT count(*) FROM %s WHERE %s = %s | count(*): %d", table, column, search, result));
+	logsql = "SELECT count(*) FROM "+table+" WHERE "+column+" = "+search+"; result: "+ string(result);
+	Logging(LOG_SQL, "countrows", logsql);
 	return result
 }
 @
@@ -409,6 +414,7 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 		err error;
 		stmt *sql.Stmt;
 		count int;
+		logsql string;
 	)
 
 	if (len(opts) > 0) {
@@ -433,15 +439,15 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 
 	if (len(opts) > 0) {
 		if (len(opts) < 2) {
-			Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM %s WHERE name = %s", field, opts[0], pkgname));
+			logsql = "SELECT "+ field +" FROM "+ opts[0] +" WHERE name = " + pkgname;
 			stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE name = ?");
 			
 		} else {
-			Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM %s WHERE %s = %s", field, opts[0], opts[1], pkgname));
+			logsql = "SELECT "+ field +" FROM "+ opts[0] +" WHERE "+ opts[1] + " = " + pkgname;
 			stmt, err = db.Prepare("SELECT "+field+" FROM "+ opts[0] +" WHERE "+ opts[1] +" = ?");
 		}
 	} else {
-		Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query: SELECT %s FROM packages WHERE name = %s", field, pkgname));
+		logsql = "SELECT "+ field +" FROM packages WHERE name = " + pkgname;
 		stmt, err = db.Prepare("SELECT "+field+" FROM packages WHERE name = ?");
 	}
 
@@ -458,7 +464,9 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 		result = "NULL";
 		return result, nil;
 	}
-	Logging(LOG_DEBUG, "getpackageinfo", fmt.Sprintf("sql query result: %s", result));
+	logsql += "; result: " + result;
+
+	Logging(LOG_SQL, "getpackageinfo", logsql)
 
 	if err != nil {
 		Logging(LOG_ERROR, "getpackageinfo", fmt.Sprintf("Error: %v", err));
@@ -472,14 +480,17 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 The [[AddPackage]] function store pkg related informations to the database [[pkg-updated.sqlite]].
 
 <<pkg-updated.go: sqlite-connect>>=
-func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {	
+func AddPackage(db *sql.DB, name string, origin string, version string, status string) int {
+	var logsql string;
+		
 	tx, err := db.Begin();
 	if err != nil {
 		Logging(LOG_FATAL, "addpackage", fmt.Sprintf("Error: %v", err));
 	}
 	stmt, err := tx.Prepare("insert into packages(name, origin, version, status) values(?, ?, ?, ?)");
 
-	Logging(LOG_DEBUG, "addpackage", fmt.Sprintf("sql query: INSERT INTO packages (name,origin,version,status) value (%s, %s, %s, %s)", name, origin, version, status));
+	logsql = "INSERT INTO packages (name,origin,version,status) value ("+name+","+origin+","+version+","+status+")";
+	Logging(LOG_SQL, "addpackage", logsql);
 
 	if err != nil {
 		Logging(LOG_ERROR, "addpackage", fmt.Sprintf("Error: %v", err));
@@ -502,21 +513,24 @@ The [[UpdatePackage]] function is used to ....
 
 <<pkg-updated.go: sqlite-connect>>=
 func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field string, where_value string, opts... string) int {
-	var	query string;
-	
+	var	(
+		query string;
+		logsql string;
+	)
 	tx, err := db.Begin();
 	if err != nil {
 		Logging(LOG_FATAL, "updatepackage", fmt.Sprint(err));
 	}
 
 	if len(opts) > 0 {
+		logsql = "UPDATE "+ opts[0] + " SET "+set_field+" = "+set_value+" WHERE "+where_field+" = "+where_value;
 		query = "UPDATE "+ opts[0] + " SET "+set_field+" = ? WHERE "+where_field+" = ?";	
 	} else {
+		logsql = "UPDATE packages SET "+set_field+" = "+set_value+" WHERE "+where_field+" = "+where_value;
 		query = "UPDATE packages SET "+set_field+" = ? WHERE "+where_field+" = ?";
 	}
-
-	Logging(LOG_DEBUG, "updatepackage", fmt.Sprintf("sql query: %s | Params: %s;%s", query, set_value, where_value));
-	
+	Logging(LOG_SQL, "updatepackage", logsql);
+		
 	stmt, err := tx.Prepare(query);
 	if err != nil {
 		Logging(LOG_ERROR, "updatepackage", fmt.Sprintf("Error: %v", err));
@@ -542,6 +556,7 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 		name string;
 		err error;
 		rows *sql.Rows;
+		logsql string;
 	)
 
 	if(len(opts) == 1) {
@@ -549,10 +564,10 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 		Logging(LOG_ERROR, "getallpackages", fmt.Sprint(err));
 		return result, err;
 	} else if(len(opts) >= 2) {
-		Logging(LOG_DEBUG, "getallpackages", fmt.Sprintf("sql query: SELECT %s FROM %s", opts[0], opts[1]));
+		logsql = "SELECT "+ opts[0] +" FROM "+ opts[1];
 		rows, err = db.Query("SELECT "+ opts[0] +" FROM "+ opts[1]);	
-	} else { 	
-		Logging(LOG_DEBUG, "getallpackages", fmt.Sprintf("sql query: SELECT name FROM packages"));
+	} else {
+		logsql = "SELECT name from packages";
 		rows, err = db.Query("SELECT name FROM packages");
 	}
 	
@@ -576,6 +591,11 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 	}
 	result = make([]string, len(tmp_result)-1);
 	copy(result, tmp_result);
+	
+//	logsql += "; result: "+string.result;
+
+	Logging(LOG_SQL, "getallpackages", logsql);
+
 	return result, err;
 }
 @
@@ -586,11 +606,16 @@ Need enable as parameter as soon as enabled service detection is ready and worki
 
 <<pkg-updated.go: sqlite-connect>>=
 func AddService(db *sql.DB, name string, svccmd string, enabled int) int {	
+	var logsql string;
+	
 	tx, err := db.Begin();
 	if err != nil {
 		Logging(LOG_ERROR, "addservice", fmt.Sprintf("Error: %v", err));
 	}
-	Logging(LOG_DEBUG, "addservice", fmt.Sprintf("sql query: INSERT INTO services (name,svccmd,enabled) VALUES (%s,%s,%s)", name, svccmd, enabled));
+	
+	logsql = "INSERT INTO services (name, svccmd, enabled) values ("+name+","+svccmd+","+string(enabled)+")";
+	Logging(LOG_SQL, "addservice", logsql);
+
 	stmt, err := tx.Prepare("insert into services (name, svccmd, enabled) values (?, ?, ?)");
 	if err != nil {
 		Logging(LOG_ERROR, "addservice", fmt.Sprintf("Error: %v", err));
@@ -743,6 +768,7 @@ func SyncPkgDatabases(db *sql.DB) error {
 		pkglist []string;
 		err error;
 		request string;
+		logsql string;
 	)
 	
 	pkglist,err = GetAllPackages(db);
@@ -765,7 +791,9 @@ func SyncPkgDatabases(db *sql.DB) error {
 		if err != nil {
 			Logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Clear pkg-updated database: failed | Error: %s", err));
 			return err;
-		}	
+		}
+		logsql = "DELETE FROM packages";
+		Logging(LOG_SQL, "syncpkgdatabase", logsql);		
 		Logging(LOG_INFO, "syncpkgdatabase", "Clear pkg-updated database: done");
 	} 
 
@@ -775,6 +803,9 @@ func SyncPkgDatabases(db *sql.DB) error {
 		Logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Sync pkg database: failed | Error: %s", err));
 	}
 	defer rows.Close();
+
+	logsql = "SELECT name, version, origin, locked FROM packages";
+	Logging(LOG_SQL, "syncpkgdatabase", logsql);
 
 	var (
 		name string;
@@ -1124,8 +1155,8 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 
 		Logging(LOG_EVENT, "getupdatepkglist", "Sync database again");
 		SyncPkgDatabases(db);
+
 		// SyncPkgDatabases will unset lockstatus, need to reset again.
-		// Better code needed here ! 
 		<<pkg-updated.go: lockexclude>>
 
 		// Check updated pkgname with pkgname before update
@@ -1762,6 +1793,7 @@ The event type [[LOG_FATAL2]] will additional exit the program after save/print 
 	const LOG_INFO = "INFO";
 	const LOG_ERROR = "ERROR";
 	const LOG_EVENT = "EVENT";
+	const LOG_SQL = "SQL";
 	const LOG_STDOUT = "CONSOLE_STDOUT";
 	const LOG_STDERR = "CONSOLE_STDERR";
 @
