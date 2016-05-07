@@ -398,7 +398,7 @@ func CountRows(db *sql.DB, table string, column string, search string) int {
 		Logging(LOG_ERROR, "countrows", fmt.Sprint(err));
 		return -1;
 	}
-	logsql = "SELECT count(*) FROM "+table+" WHERE "+column+" = "+search+"; result: "+ string(result);
+	logsql = "SELECT count(*) FROM "+table+" WHERE "+column+" = "+search+"; RESULT: "+strconv.Itoa(result);
 	Logging(LOG_SQL, "countrows", logsql);
 	return result
 }
@@ -464,7 +464,7 @@ func GetPackageInfo(db *sql.DB, field string, pkgname string, opts... string) (s
 		result = "NULL";
 		return result, nil;
 	}
-	logsql += "; result: " + result;
+	logsql += "; RESULT: "+result;
 
 	Logging(LOG_SQL, "getpackageinfo", logsql)
 
@@ -592,8 +592,7 @@ func GetAllPackages(db *sql.DB, opts... string) ([]string, error){
 	result = make([]string, len(tmp_result)-1);
 	copy(result, tmp_result);
 	
-//	logsql += "; result: "+string.result;
-
+	logsql += "; RESULT: "+fmt.Sprintf("%s",result);
 	Logging(LOG_SQL, "getallpackages", logsql);
 
 	return result, err;
