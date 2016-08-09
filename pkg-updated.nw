@@ -8,8 +8,9 @@
 <<version>>=
 var (
 	MAJOR_VERSION=0
-	MINOR_VERSION=3
-	PATCH_VERSION=5
+	MINOR_VERSION=4
+	PATCH_VERSION=0
+	SQL_SCHEMA_VERSION="1.1"
 )
 @
 
@@ -21,26 +22,27 @@ The pkg-updated tackle the update by using the pkg command.
 
 <<TODO>>=
 Legend:
-[/]	=	Feature implemented but not tested enough / not stable
+[/]	=	Feature implemented but not tested enough or/and not stable
 [x]	=	Feature implemented and stable
 
 Ideas: 
-	- [x] Version 0.3: Scheduler
-	- [x] Version 0.3: Readme / Howto use
-	- [x] Version 0.3: Parametrized program
-	- [x] Version 0.3: finalize pkg rollback for failed updates
 	- [x] Version 0.4: Check userid and sudo usage
 	- [x] Version 0.4: Reporting / Logging
-	- [/] Version 0.4: Reporting client command for generate report's
 	- [x] Version 0.4: Add weekdays as recurring option in scheduler
-	- Version 0.5: Refactor all variable names and functions
-	- Version 0.5: Proper error handling
+	- [/] Version 0.4: Prestart and Poststart command list
+	- [/] Version 0.4: Automatic DB Schema update
+	for version 0.5:
+	- [] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
+	- [] Version 0.5: Refactor all variable names and functions
+	- [] Version 0.5: Proper error handling
 	- [x] Version 0.5: Port
-	- Version 0.5: Port without using gmake
+	- [] Version 0.5: Port without using gmake
 	- [/] Version 0.5: rc.d script
-	- Version 0.5: Add Output from updated pkg messages to reportdb
+	- [] Version 0.5: Add Output from updated pkg messages to reportdb
 	- [/] Version 0.5: Syslog/Logfile
+	- [/] Version 0.5: Reporting client command for generate report's
 	- Version 0.5: Finish book and publish first public beta
+	for version 0.6 and later:
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.7: SelfUpdate routine
 	- Version 0.8: Bugfix / Cleanup documentation
@@ -52,9 +54,11 @@ Ideas:
 	- Version 2.0: Update Server which collects all reports and coordinate updates
 	- Version 2.0: Desktop: Panel tool for display successful updates
 
+
 Bugs:
 	- Need to fix RunCmd and timeout
 	- Update status is not updated in syncpkgdb
+		
 @
 
 \newpage
@@ -129,11 +133,6 @@ It is also possible to lock packages by "pkg lock <pkg-name>" command
 	],
 @
 
-Create a pkg-update report ?
-<<pkg-updated.conf>>=
-	"create-report": true,
-@
-
 Enable automated update ?
 <<pkg-updated.conf>>=
 	"do-freebsd-update": false,
@@ -151,6 +150,21 @@ Which services should be excluded if restart-daemons is enabled ?
 	],
 @
 
+Which commands should run, before upgrade start ?
+<<pkg-updated.conf>>=
+	"prestop-commands": [
+		"sysutils/openssh:/etc/rc.d/sshd stop",
+		"emulators/virtualbox:/usr/local/etc/rc.d/openssh stop"
+	],
+@
+
+Which commands should run, after upgrade is done ?
+<<pkg-updated.conf>>=
+	"poststart-commands": [
+		"sysutils/openssh:/etc/rc.d/sshd start",
+		"emulators/virtualbox:/usr/local/etc/rc.d/openssh start"
+	],
+@
 
 Should all pkg commands run with sudo ?
 <<pkg-updated.conf>>=
@@ -209,11 +223,13 @@ var config struct {
 	StrictRecurTime bool `json:"schedule-in-time"`
 	ExcludePackages []string `json:"exclude-packages"`
 	RecurDays[]int `json:"schedule-days"`
-	CreateReport bool `json:"create-report"`
+//	CreateReport bool `json:"create-report"`
 	ClearSyncDatabaseEnabled bool `json:"fresh-db-sync-on-start"`
 	DoFreebsdUpdate	bool `json:"do-freebsd-update"`
 	RestartServices bool	`json:"restart-services"`
 	ExcludedServices []string `json:"exclude-services"`
+	PreStopCommands []string `json:"prestop-commands"`
+	PostStartCommands []string `json:"poststart-commands"`
 	DowngradePackageOnFailedRestart	bool `json:"downgrade-package-on-failed-restart"`
 	UseSudo bool `json:"use-sudo"`
 	ArchiveEnable bool `json:"pkg-archive-enable"`
@@ -382,6 +398,28 @@ The function [[GetPackageInfo]] is used to report the current information's of a
 // TODO: function + Return code -> string, retcode/error
 // TODO: AddPackageDB: detect duplicate entries and avoid !!!
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
+@
+
+Update database schema if new version detected.
+This function will just return a status of the [[SQL_SCHEMA_VERSION]].
+
+<<pkg-updated.go: sqlite-connect>>=
+func UpdateSchema(db *sql.DB) int {
+	var result string;
+	ret := 0;
+	sql := "SELECT software_version FROM meta";
+	
+	err := db.QueryRow(sql).Scan(&result);
+	if err != nil {
+		Logging(LOG_INFO, "updateschema", fmt.Sprint("Cannot detect database schema version", err));
+		return -1;
+	}
+
+	if ( result != SQL_SCHEMA_VERSION) {
+		ret = -1;
+	}
+	return ret;
+}
 @
 
 We need a help function for count(*) because
@@ -653,13 +691,25 @@ Services Schema:
 - svccmd
 - enabled
 
+Meta Schema:
+- software_version
+
 For jailed version need additional in package and service schema:
 - host
 
+Require strings module for string replacement in the Schema.
+<<pkg-updated.go: modules>>=
+"strings"
+@
+
 <<pkg-updated.go: sqlite-schema>>=
-	var DBSchema []string;
+	var (
+		DBSchema []string;
+		schema string;
+	)
 	DBSchema = make([]string, 2)
-	DBSchema[0] = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE);CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT);";
+	schema = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE); CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT, prestop TEXT); CREATE TABLE meta (software_version TEXT UNIQUE); INSERT INTO meta (software_version) values (SQL_SCHEMA_VERSION)";
+	DBSchema[0] = strings.Replace(schema, "SQL_SCHEMA_VERSION", SQL_SCHEMA_VERSION, -1);
 @
 
 The Reporting Database needs follow schema
@@ -687,6 +737,8 @@ func main(){
 
 At first, we read the configuration file and initialize the Database connections.
 If databases not exists, we create them.
+Then we check the database schema by read the [[software_version]] from the [[meta]] table.
+If the database schema has been changed, the database [[pkg-updated]] will renewed by remove and recreate again.
 The report database will just open once for creating.
 After creating the report db, the file handle will close for access the report db again.
 
@@ -701,10 +753,11 @@ After creating the report db, the file handle will close for access the report d
 	Logging(LOG_EVENT, "main", fmt.Sprintf("Started pkg-updated %d.%d.%d",MAJOR_VERSION,MINOR_VERSION,PATCH_VERSION)); 
 	
 	var ret int;			
+	ret = FileExists(config.DatabaseFile);
+	Logging(LOG_INFO, "main", fmt.Sprintf("Check packages database %s: %d", config.DatabaseFile, ret));	
+
 	db := OpenDB(config.DatabaseFile);
 	defer db.Close();
-	ret = FileExists(config.DatabaseFile);	
-	Logging(LOG_INFO, "main", fmt.Sprintf("Check packages Database %s: %d", config.DatabaseFile, ret));	
 
 	if ret != 0 {
 		ret = CreateDatabase(db, 0);
@@ -714,10 +767,29 @@ After creating the report db, the file handle will close for access the report d
 		} else {
 			Logging(LOG_INFO, "main", "Create packages database: done");	
 		}
+	} else {
+		ret = UpdateSchema(db);
+		Logging(LOG_INFO, "main", fmt.Sprintf("Check packages schema update %s: %d", config.DatabaseFile, ret));
+
+		if ret != 0 {
+			Logging(LOG_INFO, "main", "Schema Update detected");
+			err := os.Remove(config.DatabaseFile);
+			if err != nil {
+				Logging (LOG_ERROR, "main", fmt.Sprintf("Cannot remove existing database file: %s, error: %v", config.DatabaseFile,err));
+			}
+			db := OpenDB(config.DatabaseFile);
+			ret = CreateDatabase(db, 0);
+			if ret != 0 {
+				Logging(LOG_ERROR, "main", "Recreate packages database: failed");	
+				os.Exit(2);
+			} else {
+				Logging(LOG_INFO, "main", "Recreate packages database: done");	
+			}
+		}
 	}
 	
 	ret = FileExists(config.ReportDatabaseFile);	
-	Logging(LOG_INFO, "main", fmt.Sprintf("Check report Database %s: %d", config.ReportDatabaseFile, ret));	
+	Logging(LOG_INFO, "main", fmt.Sprintf("Check report database %s: %d", config.ReportDatabaseFile, ret));	
 
 	if ret != 0 {
 		reportdb := OpenDB(config.ReportDatabaseFile);
@@ -901,7 +973,7 @@ func CheckUpdates(db *sql.DB) bool {
 			} else {
 				UpdatePackage(db, "prevversion", version, "origin", pkgname.String());
 			}	
-			Logging(LOG_DEBUG, "checkupdates", fmt.Sprintf("Update available for pkg: %s", pkgname.String()));
+			Logging(LOG_EVENT, "checkupdates", fmt.Sprintf("Update available for pkg: %s", pkgname.String()));
 			pkgname.Reset();
 			ret = true;
 			continue;
@@ -959,6 +1031,9 @@ func UpdateRoutine(db *sql.DB) (bool) {
 		ScanEnabledServices(db)
 
 		<<pkg-updated.go: lockexclude>>
+	
+		Logging(LOG_EVENT, "updateroutine", "Check prestop commands");
+		PrePostCommand(db, 0);
 		
 		Logging(LOG_EVENT, "updateroutine", "Start pkg Upgrade");
 		if Upgrade() != 0 {
@@ -999,6 +1074,9 @@ func UpdateRoutine(db *sql.DB) (bool) {
 				}	
 			}
 		}
+		Logging(LOG_EVENT, "updateroutine", "Check poststart commands");
+		PrePostCommand(db, 1);
+
 		<<pkg-updated.go: unlockexclude>>
 	} else {
 		Logging(LOG_EVENT, "updateroutine", "No updates available");
@@ -1074,11 +1152,11 @@ func SavePackages(db *sql.DB){
 		version, err = GetPackageInfo(db, "version", pkg);
 		path = config.ArchivePath + "/" + pkg + "-" + version + ".txz";
 		if _, err := os.Stat(path); err != nil {
-			Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg));
+			Logging(LOG_EVENT, "savepackages", fmt.Sprintf("Archive pkg: %s", pkg));
 			RunCmd("create", config.ArchivePath, pkg)
 			index++;			
 			if _, err := os.Stat(path); err == nil {
-				Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Save rollback package path into DB: %s", path));
+				Logging(LOG_EVENT, "savepackages", fmt.Sprintf("Save rollback package path into DB: %s", path));
 				origin, err = GetPackageInfo(db, "origin", pkg);
 				if (err != nil) {
 					Logging(LOG_DEBUG, "savepackages", fmt.Sprintf("Failed to get pkg origin from pkg %s: %s", pkg, err));			
@@ -1207,7 +1285,7 @@ func GetUpdatedPkgList(db *sql.DB) ([]string, error) {
 				copy(tmp, NewList);
 				tmp[index] = pkgname;
 				NewList = tmp;
-				Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s", pkgname));
+				Logging(LOG_EVENT, "getupdatepkglist", fmt.Sprintf("Successful updated: %s - Version %s -> %s", pkgname, OldPkgVersion, NewPkgVersion));
 			} else {
 					Logging(LOG_ERROR, "getupdatepkglist", fmt.Sprintf("New package installed: %s", pkgname));
 			}
@@ -1772,6 +1850,63 @@ func RestartEnabledServices(db *sql.DB, pkglist []string) ([]string){
 @
 
 \newpage
+\subsection{Pre Stop and Post Start Commands}
+
+Some services or programs often needs to be run, before the upgrade process start.
+A good example is if a package contains kernel modules which needs to unload before the package will install a newer version. 
+Also some commands needs to be run after pkg upgrade is done.
+We can combine the pre and post commands in one function.
+First we check if commands are defined and if yes, iterate through the list and hand over the commands to the [[RunCmd]] function.
+The variable [[cmdtype]] selects the Pre or Post command list to use.
+Both lists are iterate in order defined in golang range function.
+
+<<pkg-updated.go: prepostcommmands>>=
+func PrePostCommand(db *sql.DB, cmdtype int){
+	var (
+		updatelist []string;
+		origin_cmd []string;
+		origin string;
+		err error;
+	);
+
+	updatelist, err = GetUpdateList(db);
+	
+	if (err != nil) {
+		Logging(LOG_ERROR, "prepostcommands", fmt.Sprintf("Did not get update list: %v", err));
+		return;
+	}
+	
+	for _, pkg := range updatelist {
+		origin, err = GetPackageInfo(db, "origin", pkg)
+		if (err != nil) {
+			Logging(LOG_ERROR, "prepostcommands", fmt.Sprintf("Did not get origin from pkg: %s, error: %v", pkg, err));
+			return;
+		}
+		
+		if (cmdtype == 0) {
+			for _, value := range config.PreStopCommands {
+				origin_cmd = strings.Split(value, ":");			
+				if origin_cmd[0] == origin {
+					Logging(LOG_EVENT, "prepostcommands", fmt.Sprintf("Run prestop command for pkg: %s", origin_cmd[0]));
+					RunCmd("command", origin_cmd[1]);
+				}
+
+			}
+		}
+		if (cmdtype == 1) {		 
+			for _, value := range config.PostStartCommands {
+				origin_cmd = strings.Split(value, ":");
+				if origin_cmd[0] == origin {
+					Logging(LOG_EVENT, "prepostcommands", fmt.Sprintf("Run poststart command for pkg: %s", origin_cmd[0]));
+					RunCmd("command", origin_cmd[1]);
+				}
+			}
+		}
+	}
+}
+@
+
+\newpage
 \subsection{Reporting}
 
 For general reporting, we need a logging to file function and a client program to read the informations from the database.
@@ -1912,35 +2047,6 @@ func Syslog(prio string, facility string, msg string) {
 }
 @
 
-Now comes the report client program.
-This program just reads the entries from the report db and sort it by day, week or month.
-
-The idea to create a report like with three importent informats.
-1) How much packages were upgraded in the last day/week/month
-2) Does rollbacks or other unexpected events occurs 
-3) Are the system is uptodate or action are needed ?
-
-
-How the report should be created.
-The first approach would be to have a report for the current day and the current week.
-Later on, the user can define the the day or the time range for building a report out of it.
-
-
-// continue 0.3.3 (report client)
-
-<<pkg-updated-report.go: main>>=
-func main(){
-	// report-db-client MAIN
-}
-@
-
-
-End of Main of pkg-updated-report
-
-<<pkg-updated-report.go: main>>=
-}
-@
-
 \newpage
 \section{Check before run the program}
 
@@ -2037,6 +2143,63 @@ func Check() {
 
 }
 @
+
+
+\newpage
+\section{Report Client}
+
+The report client program.
+This program just reads the entries from the report db and sort it by day, week or month.
+
+The idea to create a report with three important informations:
+1) How much packages were upgraded in the last day/week/month
+2) Does roll-backs or other unexpected events occurs 
+3) Are the system is uptodate or action are needed ?
+
+How the report should be created.
+The first approach would be to have a report for the current day and the current week.
+Later on, the user can define the the day or the time range for building a report out of it.
+
+Which events and informations are needed to generate a daily report ?
+
+- Eventtype: Event
+- Message informations: Updated: pkg ...
+	-> Count this informations
+	-> Example Output: 	
+		Successful updated packages: xxx
+		Un-Successful updated packages: xxx
+		Successful service restarts: x
+		Un-Successful service restarts: y
+		-> Rollbacks:	x with success, y without success
+		Manual Actions required: Yes
+		Excluded packages from update: x
+		Excluded Services from restart: y	
+
+To filter this informations, the messages inside the DB must be structured and keep always the same string or eventtype
+
+<<pkg-updated-report.go: modules>>=
+<<pkg-updated.go: modules>>
+@
+
+// continue 0.4 (report client)
+
+<<pkg-updated-report.go: main>>=
+func main(){
+@
+
+
+Hello world
+<<pkg-updated-report.go: main>>=
+	fmt.Sprintf("Hello world\n");
+@
+
+
+End of Main of pkg-updated-report
+
+<<pkg-updated-report.go: main>>=
+}
+@
+
 
 \newpage
 \subsection{Parameters}
@@ -2144,6 +2307,10 @@ func RunCmd(cmd string, opts... string) (string, error) {
 		case "sleep":
 			_, err = exec.Command("sleep", opts[0]).CombinedOutput(); 
 			return "wakeup", err; 
+		case "command":
+			cmdName = "/bin/sh"
+			cmdArg1 = []string{"-c"}
+			cmdTimeout = "10"
 		case "service":
 			cmdName = "service";
 			cmdArg1 = []string{"-e"};
@@ -2348,6 +2515,7 @@ import (
 <<pkg-updated.go: syslog>>
 <<pkg-updated.go: logging>>
 <<pkg-updated.go: runcmd>>
+<<pkg-updated.go: prepostcommmands>>
 <<pkg-updated.go: chop>>
 <<pkg-updated.go: syncdb>>
 <<pkg-updated.go: check-updates>>
@@ -2375,7 +2543,6 @@ import (
 <<version>>
 <<pkg-updated.go: variables>>
 <<pkg-updated.go: readconfig>>
-<<pkg-updated.go: sqlite-connect>>
 <<pkg-updated.go: sqlite-connect>>
 
 <<pkg-updated-report.go: main>>
