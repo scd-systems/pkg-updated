@@ -1,24 +1,25 @@
 Legend:
-[/]     =       Feature implemented but not tested enough / not stable
+[/]     =       Feature implemented but not tested enough or/and not stable
 [x]     =       Feature implemented and stable
 
 Ideas: 
-        - [x] Version 0.3: Scheduler
-        - [x] Version 0.3: Readme / Howto use
-        - [x] Version 0.3: Parametrized program
-        - [x] Version 0.3: finalize pkg rollback for failed updates
         - [x] Version 0.4: Check userid and sudo usage
         - [x] Version 0.4: Reporting / Logging
-        - [/] Version 0.4: Reporting client command for generate report's
         - [x] Version 0.4: Add weekdays as recurring option in scheduler
-        - Version 0.5: Refactor all variable names and functions
-        - Version 0.5: Proper error handling
+        - [/] Version 0.4: Prestart and Poststart command list
+        - [/] Version 0.4: Automatic DB Schema update
+        for version 0.5:
+        - [] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
+        - [] Version 0.5: Refactor all variable names and functions
+        - [] Version 0.5: Proper error handling
         - [x] Version 0.5: Port
-        - Version 0.5: Port without using gmake
+        - [] Version 0.5: Port without using gmake
         - [/] Version 0.5: rc.d script
-        - Version 0.5: Add Output from updated pkg messages to reportdb
+        - [] Version 0.5: Add Output from updated pkg messages to reportdb
         - [/] Version 0.5: Syslog/Logfile
+        - [/] Version 0.5: Reporting client command for generate report's
         - Version 0.5: Finish book and publish first public beta
+        for version 0.6 and later:
         - Version 0.6: Fix bugs and Performance issues
         - Version 0.7: SelfUpdate routine
         - Version 0.8: Bugfix / Cleanup documentation
@@ -30,10 +31,11 @@ Ideas:
         - Version 2.0: Update Server which collects all reports and coordinate updates
         - Version 2.0: Desktop: Panel tool for display successful updates
 
+
 Bugs:
         - Need to fix RunCmd and timeout
         - Update status is not updated in syncpkgdb
-        - after upgrade process, the second update process are not reporting the update list correct, if a locked package have updates available cause of exclusion.
+                
 // 20160309: Need to set default config parameters if no parameters set in configfile
 // 20160318: Switch to proper config file format instead using of json format
 // TODO: function + Return code -> string, retcode/error
@@ -44,5 +46,6 @@ Bugs:
 // 20160124: SyncPackageDB() -> Use message-queue and go routine for faster copy process
 // TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
 // TODO: Need to use nil error return correctly !
+// 20160505: SavePackages(): Proper check/verify of existing archive files
 // 20160201: Implement error handling
 // 20160209: Improve string/int usage in LockPackage
