@@ -6,8 +6,8 @@ Ideas:
         - [x] Version 0.4: Check userid and sudo usage
         - [x] Version 0.4: Reporting / Logging
         - [x] Version 0.4: Add weekdays as recurring option in scheduler
-        - [/] Version 0.4: Prestart and Poststart command list
-        - [/] Version 0.4: Automatic DB Schema update
+        - [x] Version 0.4: Prestart and Poststart command list
+        - [x] Version 0.4: Automatic DB Schema update
         for version 0.5:
         - [] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
         - [] Version 0.5: Refactor all variable names and functions
@@ -18,7 +18,7 @@ Ideas:
         - [] Version 0.5: Add Output from updated pkg messages to reportdb
         - [/] Version 0.5: Syslog/Logfile
         - [/] Version 0.5: Reporting client command for generate report's
-        - Version 0.5: Finish book and publish first public beta
+        - Version-  0.5: Finish book and publish first public beta
         for version 0.6 and later:
         - Version 0.6: Fix bugs and Performance issues
         - Version 0.7: SelfUpdate routine
