@@ -1,4 +1,3 @@
-
 %% 					ATTENTION
 %%
 %%         	!!! Just edit the ".nw" File !!!
@@ -9,7 +8,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=4
-	PATCH_VERSION=0
+	PATCH_VERSION=1
 	SQL_SCHEMA_VERSION="1.1"
 )
 @
@@ -32,7 +31,7 @@ Ideas:
 	- [x] Version 0.4: Prestart and Poststart command list
 	- [x] Version 0.4: Automatic DB Schema update
 	for version 0.5:
-	- [] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
+	- [/] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
 	- [] Version 0.5: Refactor all variable names and functions
 	- [] Version 0.5: Proper error handling
 	- [x] Version 0.5: Port
@@ -41,16 +40,16 @@ Ideas:
 	- [] Version 0.5: Add Output from updated pkg messages to reportdb
 	- [/] Version 0.5: Syslog/Logfile
 	- [/] Version 0.5: Reporting client command for generate report's
-	- Version-  0.5: Finish book and publish first public beta
+	- [] Version-  0.5: Finish book and publish first public beta
 	for version 0.6 and later:
+	- Version 0.6: Add parameter for rollback packages
 	- Version 0.6: Fix bugs and Performance issues
+	- Version 0.6: Jail Support
 	- Version 0.7: SelfUpdate routine
-	- Version 0.8: Bugfix / Cleanup documentation
-	- Version 0.9: automate schema upgrade if new schema available
-	- Version 0.9: Sort / Ordered service restart option
+	- Version 0.8: Sort / Ordered service restart option
 	- Version 0.9: Bugfix / Cleanup documentation
-	- Version 0.9: Jail support
 	- Version 1.0: Stable Release
+	- Version 2.0: Change update routine completely. Create list of tasks and run through it afterwards (with verify and ok option)
 	- Version 2.0: Update Server which collects all reports and coordinate updates
 	- Version 2.0: Desktop: Panel tool for display successful updates
 
@@ -58,16 +57,14 @@ Ideas:
 Bugs:
 	- Need to fix RunCmd and timeout
 	- Update status is not updated in syncpkgdb
-		
+	
+Other:
 @
 
 \newpage
 \subsection{Configuration}
 
 The [[pkg-updated.conf]] parameters in detail.
-
-%% The [[exclude]] define the packages, which will not updated automatically.
-%% Reports of the pkg upgrade progress will be created if parameter is set true (Boolean). 
 
 <<pkg-updated.conf>>=
 {
@@ -196,7 +193,7 @@ The report-database-file is for logging and reporting of pkg-updated.
 @
 
 Should the pkg-updated DB synchronized on every boot
-If set to true, the DB will delete on every start of the program.
+If set to true, the package database will truncated on every start of the program.
 All rollback package information's are lost, so no automate rollback possible !
 
 <<pkg-updated.conf>>=
@@ -294,7 +291,6 @@ func ReadConfig() int {
 @
 <<TODO>>=
 // 20160309: Need to set default config parameters if no parameters set in configfile
-// 20160318: Switch to proper config file format instead using of json format
 @
 
 
@@ -397,8 +393,8 @@ In addition some other functions are needed, like add package with name and stat
 The function [[GetPackageInfo]] is used to report the current information's of a package.
 
 <<TODO>>=
-// TODO: function + Return code -> string, retcode/error
-// TODO: AddPackageDB: detect duplicate entries and avoid !!!
+// 20160101: function + Return code -> string, retcode/error
+// 20160101: AddPackageDB: detect duplicate entries and avoid !!!
 // 20160212: GetPackageInfo(): Need to find better code for dynamic requests (table, field, ...)
 @
 
@@ -707,11 +703,17 @@ Require strings module for string replacement in the Schema.
 <<pkg-updated.go: sqlite-schema>>=
 	var (
 		DBSchema []string;
-		schema string;
+		schema bytes.Buffer;
 	)
 	DBSchema = make([]string, 2)
-	schema = "CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT); CREATE INDEX package_name ON packages(name COLLATE NOCASE); CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT, prestop TEXT); CREATE TABLE meta (software_version TEXT UNIQUE); INSERT INTO meta (software_version) values (SQL_SCHEMA_VERSION)";
-	DBSchema[0] = strings.Replace(schema, "SQL_SCHEMA_VERSION", SQL_SCHEMA_VERSION, -1);
+	
+	schema.WriteString("CREATE TABLE packages (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT);");
+	// schema.WriteString("CREATE TABLE packages_tmp (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL UNIQUE, origin TEXT, prevversion TEXT, version TEXT NOT NULL, status TEXT NOT NULL, archivepath TEXT, lockstatus TEXT);");
+	schema.WriteString("CREATE TABLE services (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, svccmd TEXT, enabled TEXT, prestop TEXT);");
+	schema.WriteString("CREATE TABLE meta (software_version TEXT UNIQUE); INSERT INTO meta (software_version) values (SQL_SCHEMA_VERSION);");
+	schema.WriteString("CREATE INDEX package_name ON packages(name COLLATE NOCASE);");
+
+	DBSchema[0] = strings.Replace(schema.String(), "SQL_SCHEMA_VERSION", SQL_SCHEMA_VERSION, -1);
 @
 
 The Reporting Database needs follow schema
@@ -826,13 +828,13 @@ Maybe need to implement some self-healing checks every five minutes or other tas
 @
 
 
-In every iteration round from daemon, we must synchronize the local package information's to the pkg-updated database.
-This is necessary, because pkg-updated will never touch the pkg databases it self, it will use his own.
-The synchronization is quiet simple, copy over all package names, version from local pkg-database and fill into the pkg-updated DB.
-It is also important to unset [[lockstatus]] before syncing, otherwise the status will overwritten and locked packages never be unlocked again.  
+In every iteration round from the [[updateroutine]], we must synchronize the local package informations with the pkg-updated database.
+This step is necessary, because pkg-updated will never touch the pkg databases from the system it self, instead it use it's own.
+The synchronization is quiet simple, copy all package names, version from local pkg-database and fill into the pkg-updated DB.
+It is also important to unset [[lockstatus]] before syncing, otherwise the status will overwritten and locked packages never be unlocked again.
 
 <<pkg-updated.go: syncdb>>=
-func SyncPkgDatabases(db *sql.DB) error {
+func SyncPkgDatabases(db *sql.DB, opts... string) error {
 	dbpkg := OpenDB(config.PkgDatabaseFile);
 	defer dbpkg.Close();
 
@@ -842,7 +844,14 @@ func SyncPkgDatabases(db *sql.DB) error {
 		err error;
 		request string;
 		logsql string;
+		table string;
 	)
+
+	if (len (opts) > 1) {
+		table = opts[0];
+	} else {
+		table = "packages";
+	}
 	
 	pkglist,err = GetAllPackages(db);
 
@@ -860,24 +869,23 @@ func SyncPkgDatabases(db *sql.DB) error {
 		
 	if (config.ClearSyncDatabaseEnabled == true){
 		Logging(LOG_INFO, "syncpkgdatabase", "Fresh pkg databases syncronize");
-		_, err = db.Exec("DELETE FROM packages");
+		_, err = db.Exec("DELETE FROM " + table);
 		if err != nil {
 			Logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Clear pkg-updated database: failed | Error: %s", err));
 			return err;
 		}
-		logsql = "DELETE FROM packages";
+		logsql = "DELETE FROM " + table;
 		Logging(LOG_SQL, "syncpkgdatabase", logsql);		
 		Logging(LOG_INFO, "syncpkgdatabase", "Clear pkg-updated database: done");
 	} 
 
-		
-	rows, err := dbpkg.Query("SELECT name, version, origin, locked FROM packages");
+	rows, err := dbpkg.Query("SELECT name, version, origin, locked FROM " + table);
 	if err != nil {
 		Logging(LOG_ERROR, "syncpkgdatabase", fmt.Sprintf("Sync pkg database: failed | Error: %s", err));
 	}
 	defer rows.Close();
 
-	logsql = "SELECT name, version, origin, locked FROM packages";
+	logsql = "SELECT name, version, origin, locked FROM " + table;
 	Logging(LOG_SQL, "syncpkgdatabase", logsql);
 
 	var (
@@ -1043,6 +1051,10 @@ func UpdateRoutine(db *sql.DB) (bool) {
 			return ret;
 		}
 
+		// Check all packages changes (removed, or new installed packages)
+		Logging(LOG_EVENT, "updateroutine", "Check for new installed and removed packages");
+		check_new_and_removed_packages(db)
+		
 		// Check updated packages and return the list		
 		Logging(LOG_EVENT, "updateroutine", "Get list of successful updated packages");
 		updated_pkgs, err = GetUpdatedPkgList(db);		
@@ -1132,8 +1144,8 @@ Create the archive packages for backup and save the archive path and file back t
 Before start with archive packages, we check if the package already exists
 
 <<TODO>>=
-// TODO: Put name and version in a 2d slice/array as return from GetUpdateList() !
-// TODO: Need to use nil error return correctly !
+// 20160101: Put name and version in a 2d slice/array as return from GetUpdateList() !
+// 20160101: Need to use nil error return correctly !
 @
 
 <<pkg-updated.go: update>>=
@@ -1352,6 +1364,79 @@ func RollbackPackage(db *sql.DB, name string) bool{
 
 <<TODO>>=
 // 20160201: Implement error handling
+@
+
+
+We need a method for detecting new or removed packages during the pkg upgrade process.
+
+%%Need:	- SQL Query for find changes (inner/outer line)
+%%
+%%To detect removes:
+%%select * from packages except select * from packages_tmp
+%%To detect new installed packages:
+%%select * from packages_tmp except select * from packages
+
+The idea is to compare two lists and find differences.
+One list contains all package origins from the OS based local pkg database with the current package informations.
+The second list contains the state of the packages before upgrade was running.
+
+First we get all package origins from the local pkg db and store this information into the array [[new_pkglist]].
+Then we compare the [[new_pkglist]] against the pkg-update package table.
+So we will know which packages were new installed and which packages has been removed.
+
+<<pkg-updated.go: check_new_and_removed_packages>>=
+func check_new_and_removed_packages(db *sql.DB) {
+
+	var (
+		new_pkglist []string;
+		current_pkglist []string;
+		found int;
+		err error;
+	);
+
+	dbpkg := OpenDB(config.PkgDatabaseFile);
+	defer dbpkg.Close();
+
+	new_pkglist, err = GetAllPackages(dbpkg, "origin", "packages");	
+	if (err != nil) {
+		Logging(LOG_ERROR, "check_new_and_removed_packages", fmt.Sprintf("Get packages from local pkg db failed: %s", err));		
+	}
+
+	current_pkglist, err = GetAllPackages(db, "origin", "packages");
+	if (err != nil) {
+		Logging(LOG_ERROR, "check_new_and_removed_packages", fmt.Sprintf("Get packages from pkg db failed: %s", err));		
+	}
+
+	found = 1;
+	for new_pkg := range new_pkglist {
+		for old_pkg := range current_pkglist {
+			if (new_pkg == old_pkg) {
+				found = 0;
+				break;
+			}
+		}
+		if (found == 1) {
+			Logging(LOG_INFO, "check_new_and_removed_packages", fmt.Sprintf("New installed packages: %s", new_pkg));		
+		}	
+	}
+	
+	found=1;
+	for old_pkg := range current_pkglist {
+		for new_pkg := range new_pkglist {
+			if (old_pkg == new_pkg) {
+				found = 0;
+				break;
+			}
+		}
+		if (found == 1) {
+			Logging(LOG_INFO, "check_new_and_removed_packages", fmt.Sprintf("Removed packages: %s", old_pkg));		
+		}	
+	}	
+}
+@
+
+<<TODO>>=
+// 20160907: check_new_and_removed_packages(): Use Map for list checks to reduce the for loops to two instead of four
 @
 
 \subsubsection{Exclude packages from update process}
@@ -2211,7 +2296,7 @@ Define the parameters for [[pkg-updated]].
 <<pkg-updated-manpage>>=
 -help		Print help page
 -debug		debug all messages
--runone		Disable the scheduler and run only one time and exit
+-runonce	Disable the scheduler and run only one time and exit
 -config		Use different config (default: /usr/local/etc/pkg-updated/pkg-updated.conf)
 -version	Show version and exit
 @
@@ -2393,7 +2478,7 @@ func HelpPage() {
 	fmt.Printf("-help\t\t\t\tShow this page\n");
 	fmt.Printf("-config <FILENAME>\t\tPath to config file to use\n");
 	fmt.Printf("-debug\t\t\t\tRuns in debug mode and prints all LOG types\n");
-	fmt.Printf("-runone\t\t\t\tDisable scheduler and just run once update procedure\n");
+	fmt.Printf("-runonce\t\t\tDisable scheduler and just run once update procedure\n");
 	fmt.Printf("-version\t\t\tShow version and exit\n");
 /*
 	fmt.Printf("-reporting\tCreate and use a report db for all events");
@@ -2521,6 +2606,7 @@ import (
 <<pkg-updated.go: chop>>
 <<pkg-updated.go: syncdb>>
 <<pkg-updated.go: check-updates>>
+<<pkg-updated.go: check_new_and_removed_packages>>
 <<pkg-updated.go: lock>>
 <<pkg-updated.go: rollback>>
 <<pkg-updated.go: services>>
