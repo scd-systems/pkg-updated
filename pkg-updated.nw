@@ -43,6 +43,7 @@ Ideas:
 	- [] Version-  0.5: Finish book and publish first public beta
 	for version 0.6 and later:
 	- Version 0.6: Add parameter for rollback packages
+	- Version 0.6: Handle Downgrade packages
 	- Version 0.6: Fix bugs and Performance issues
 	- Version 0.6: Jail Support
 	- Version 0.7: SelfUpdate routine
@@ -583,6 +584,40 @@ func UpdatePackage(db *sql.DB, set_field string, set_value string, where_field s
 }
 @
 
+The [[RemovePackage]] function remove packages from the [[pkg-updated.sqlite]] Database.
+
+<<pkg-updated.go: sqlite-connect>>=
+func RemovePackage(db *sql.DB, origin string) int {
+
+	query := "DELETE FROM packages WHERE origin = ?";
+	logsql := "DELETE FROM packages WHERE origin = " + origin;
+	
+	tx, err := db.Begin();
+	if err != nil {
+		Logging(LOG_FATAL, "removepackage", fmt.Sprintf("Error: %v", err));
+	}
+	stmt, err := tx.Prepare(query);
+	defer stmt.Close()
+
+	Logging(LOG_SQL, "removepackage", logsql);
+
+	if err != nil {
+		Logging(LOG_ERROR, "removepackage", fmt.Sprintf("Error: %v", err));
+		return -1;
+	}
+	_, err = stmt.Exec(origin);
+
+	if err != nil {
+		Logging(LOG_ERROR, "removepackage", fmt.Sprintf("Error: %v", err));
+		return -1;
+	}
+	tx.Commit();
+	
+	return 0;
+}
+@
+
+
 Function to return all available package names as splice
 
 <<pkg-updated.go: sqlite-connect>>=
@@ -1053,7 +1088,7 @@ func UpdateRoutine(db *sql.DB) (bool) {
 
 		// Check all packages changes (removed, or new installed packages)
 		Logging(LOG_EVENT, "updateroutine", "Check for new installed and removed packages");
-		check_new_and_removed_packages(db)
+		Check_new_and_removed_packages(db)
 		
 		// Check updated packages and return the list		
 		Logging(LOG_EVENT, "updateroutine", "Get list of successful updated packages");
@@ -1385,13 +1420,14 @@ Then we compare the [[new_pkglist]] against the pkg-update package table.
 So we will know which packages were new installed and which packages has been removed.
 
 <<pkg-updated.go: check_new_and_removed_packages>>=
-func check_new_and_removed_packages(db *sql.DB) {
+func Check_new_and_removed_packages(db *sql.DB) {
 
 	var (
 		new_pkglist []string;
 		current_pkglist []string;
 		found int;
 		err error;
+		ret int;
 	);
 
 	dbpkg := OpenDB(config.PkgDatabaseFile);
@@ -1408,35 +1444,44 @@ func check_new_and_removed_packages(db *sql.DB) {
 	}
 
 	found = 1;
-	for new_pkg := range new_pkglist {
-		for old_pkg := range current_pkglist {
+	
+	for _ , new_pkg := range new_pkglist {
+		for _ , old_pkg := range current_pkglist {
 			if (new_pkg == old_pkg) {
 				found = 0;
 				break;
 			}
 		}
 		if (found == 1) {
-			Logging(LOG_INFO, "check_new_and_removed_packages", fmt.Sprintf("New installed packages: %s", new_pkg));		
-		}	
+			Logging(LOG_EVENT, "check_new_and_removed_packages", fmt.Sprintf("New installed packages: %s", new_pkg));		
+		} else {
+			found = 1;
+		}
 	}
 	
-	found=1;
-	for old_pkg := range current_pkglist {
-		for new_pkg := range new_pkglist {
+	found = 1;
+	for _ , old_pkg := range current_pkglist {
+		for _ , new_pkg := range new_pkglist {
 			if (old_pkg == new_pkg) {
 				found = 0;
 				break;
 			}
 		}
 		if (found == 1) {
-			Logging(LOG_INFO, "check_new_and_removed_packages", fmt.Sprintf("Removed packages: %s", old_pkg));		
-		}	
+			Logging(LOG_EVENT, "check_new_and_removed_packages", fmt.Sprintf("Removed packages: %s", old_pkg));
+			ret = RemovePackage(db, old_pkg);
+			if (ret != 0) {
+				Logging(LOG_INFO, "check_new_and_removed_packages", fmt.Sprintf("Remove package %s from DB has been failed", old_pkg));
+			}
+		} else {
+			found = 1;
+		}
 	}	
 }
 @
 
 <<TODO>>=
-// 20160907: check_new_and_removed_packages(): Use Map for list checks to reduce the for loops to two instead of four
+// 20160907: Check_new_and_removed_packages(): Use Map for list checks to reduce the for loops to two instead of four
 @
 
 \subsubsection{Exclude packages from update process}

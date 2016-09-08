@@ -9,7 +9,7 @@ Ideas:
         - [x] Version 0.4: Prestart and Poststart command list
         - [x] Version 0.4: Automatic DB Schema update
         for version 0.5:
-        - [] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
+        - [/] Version 0.5: Log all pkg update/upgrade informations (Re-Installed pkg, New installed, Removed...)
         - [] Version 0.5: Refactor all variable names and functions
         - [] Version 0.5: Proper error handling
         - [x] Version 0.5: Port
@@ -21,13 +21,14 @@ Ideas:
         - [] Version-  0.5: Finish book and publish first public beta
         for version 0.6 and later:
         - Version 0.6: Add parameter for rollback packages
+        - Version 0.6: Handle Downgrade packages
         - Version 0.6: Fix bugs and Performance issues
+        - Version 0.6: Jail Support
         - Version 0.7: SelfUpdate routine
         - Version 0.8: Sort / Ordered service restart option
-        - Version 0.9: Jail support
         - Version 0.9: Bugfix / Cleanup documentation
         - Version 1.0: Stable Release
-        - Version 2.0: Change update routine complete. Create list of tasks and run through it afterwards (with verify and ok option)
+        - Version 2.0: Change update routine completely. Create list of tasks and run through it afterwards (with verify and ok option)
         - Version 2.0: Update Server which collects all reports and coordinate updates
         - Version 2.0: Desktop: Panel tool for display successful updates
 
@@ -48,5 +49,5 @@ Other:
 // 20160101: Need to use nil error return correctly !
 // 20160505: SavePackages(): Proper check/verify of existing archive files
 // 20160201: Implement error handling
-// 20160907: check_new_and_removed_packages(): Use Map for list checks to reduce the for loops to two instead of four
+// 20160907: Check_new_and_removed_packages(): Use Map for list checks to reduce the for loops to two instead of four
 // 20160209: Improve string/int usage in LockPackage
