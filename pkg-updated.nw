@@ -8,7 +8,7 @@
 var (
 	MAJOR_VERSION=0
 	MINOR_VERSION=4
-	PATCH_VERSION=1
+	PATCH_VERSION=2
 	SQL_SCHEMA_VERSION="1.1"
 )
 @
@@ -40,7 +40,10 @@ Ideas:
 	- [] Version 0.5: Add Output from updated pkg messages to reportdb
 	- [/] Version 0.5: Syslog/Logfile
 	- [/] Version 0.5: Reporting client command for generate report's
-	- [] Version-  0.5: Finish book and publish first public beta
+	- [] Version 0.5: Finish book and publish first public beta
+	- [/] Version 0.5: Usage pkg-static instead of dynamic linked binary
+	- [] Version 0.5: Add configurable command parameters
+	- [] Version 0.5: Fix pdf creation with oversized code boxes
 	for version 0.6 and later:
 	- Version 0.6: Add parameter for rollback packages
 	- Version 0.6: Handle Downgrade packages
@@ -2410,7 +2413,7 @@ func RunCmd(cmd string, opts... string) (string, error) {
 	cmdStdOut := &bytes.Buffer{}
 	cmdStdErr := &bytes.Buffer{}
 
-	cmdName = "pkg";
+	cmdName = "pkg-static";
 	switch cmd {
 		case "install":
 			cmdArg1 = []string{"install", "-y", "-f"};
@@ -2578,7 +2581,7 @@ make install clean
 Sudo rules need
 
 <<sudo>>=
-_pkg-updated	ALL=(ALL)	NOPASSWD: /usr/sbin/pkg install -y -f *, /usr/sbin/pkg update -y -f, /usr/sbin/pkg lock -y *, /usr/sbin/pkg unlock -y *, /usr/sbin/pkg upgrade -y, /usr/sbin/pkg create -o *, /usr/sbin/pkg version -Rov, /usr/sbin/pkg which -qo *, /usr/sbin/service *
+_pkg-updated	ALL=(ALL)	NOPASSWD: /usr/local/sbin/pkg install -y -f *, /usr/local/sbin/pkg update -y -f, /usr/local/sbin/pkg lock -y *, /usr/local/sbin/pkg unlock -y *, /usr/local/sbin/pkg upgrade -y, /usr/local/sbin/pkg create -o *, /usr/local/sbin/pkg version -Rov, /usr/local/sbin/pkg which -qo *, /usr/local/sbin/service *
 @
 
 
